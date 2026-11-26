@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="author" content="Patrick Brandt">
+<title>NCE-Campus Guest Voucher</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Login -->
+<main id="loginView" class="login-wrap" hidden>
+  <form id="loginForm" class="card login-card" autocomplete="on">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span>NCE-Campus Guest Voucher</span></div>
+    <h1>Anmelden</h1>
+    <p class="muted">Mit dem Northbound-Account des iMaster NCE-Campus anmelden.</p>
+    <div id="loginNotice" class="notice warn" hidden></div>
+    <label class="field" id="loginTargetField" hidden><span>NCE-Ziel</span><select id="loginTargetSel" name="target"></select></label>
+    <label class="field"><span>Benutzername</span><input id="loginUser" name="username" type="text" autocomplete="username" required autofocus></label>
+    <label class="field"><span>Passwort</span><input id="loginPass" name="password" type="password" autocomplete="current-password" required></label>
+    <div id="loginError" class="error" role="alert" hidden></div>
+    <button class="btn primary block" id="loginBtn" type="submit">Anmelden</button>
+  </form>
+</main>
+
+<!-- App -->
+<div id="appView" hidden>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span>NCE-Campus Guest Voucher</span></div>
+    <div class="topbar-right">
+      <span class="muted small" id="tlsInfo"></span>
+      <span class="muted small" id="whoami"></span>
+      <button class="btn ghost" id="logoutBtn" type="button">Abmelden</button>
+    </div>
+  </header>
+
+  <main class="content">
+    <div id="appNotice" class="notice warn" hidden></div>
+
+    <div class="page-head">
+      <div>
+        <h1>WLAN-Gast-Voucher</h1>
+        <p class="muted" id="summary">Lade…</p>
+      </div>
+      <button class="btn primary" id="createBtn" type="button">+ Voucher anlegen</button>
+    </div>
+
+    <div class="groupbar card">
+      <label for="groupSel" class="muted small">Gast-Benutzergruppe</label>
+      <select id="groupSel" aria-label="Gast-Benutzergruppe"></select>
+      <span class="muted small" id="groupInfo"></span>
+      <div class="ssidrow">
+        <label for="ssidSel" class="muted small">Gast-WLAN im QR-Code</label>
+        <select id="ssidSel" aria-label="Gast-WLAN (SSID) im QR-Code"><option value="">Lade SSIDs …</option></select>
+        <input id="ssidManual" maxlength="32" placeholder="SSID eingeben" autocomplete="off" hidden>
+        <button class="btn ghost sm" id="ssidRaw" type="button" title="Original-Antworten des NCE zur SSID-Abfrage">Rohdaten</button>
+        <span class="muted small" id="ssidInfo"></span>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <input id="search" type="search" placeholder="Suchen (Code, Benutzer, Beschreibung)…" aria-label="Suchen">
+      <select id="statusFilter" aria-label="Status">
+        <option value="">Alle Status</option>
+        <option value="active">Aktiv</option>
+        <option value="expired">Abgelaufen</option>
+        <option value="disabled">Deaktiviert</option>
+      </select>
+      <span class="spacer"></span>
+      <button class="btn" id="printBtn" type="button" disabled>QR-Karten drucken</button>
+      <button class="btn danger" id="deleteBtn" type="button" disabled>Löschen</button>
+      <button class="btn" id="refreshBtn" type="button" title="Neu laden">↻</button>
+    </div>
+
+    <div class="card table-card">
+      <table id="table">
+        <thead>
+          <tr>
+            <th class="chk"><input type="checkbox" id="checkAll" aria-label="Alle auswählen"></th>
+            <th>Voucher</th><th>Passwort</th><th>Typ</th><th>Gültig bis</th><th>Status</th><th>Beschreibung</th><th class="qrcol">QR</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div id="empty" class="empty" hidden></div>
+      <div id="loading" class="empty">Lade…</div>
+    </div>
+    <p class="muted small" id="liveHint">Alle Daten kommen live aus dem NCE. Passcodes und Passwörter gibt der NCE nicht zurück – sie sind nur direkt nach dem Anlegen sichtbar (bis die Seite neu geladen wird). Bitte dann drucken oder notieren.</p>
+  </main>
+</div>
+
+<!-- Dialog: Anlegen -->
+<dialog id="createDlg">
+  <form method="dialog" id="createForm">
+    <h2>Voucher anlegen</h2>
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab active" data-mode="single" role="tab">Einzeln</button>
+      <button type="button" class="tab" data-mode="batch" role="tab">Batch</button>
+    </div>
+    <div class="grid">
+      <label class="field batch-only"><span>Anzahl (max. <b id="maxBatch">200</b>)</span><input id="fCount" type="number" min="1" value="10"></label>
+      <label class="field"><span>Voucher-Typ</span>
+        <select id="fType"><option value="6">Passcode (nur Code)</option><option value="20">Benutzername + Passwort</option></select></label>
+      <label class="field only-user"><span>Präfix Benutzername</span><input id="fPrefix" type="text" maxlength="12"></label>
+      <label class="field"><span>Gültigkeit beginnt</span>
+        <select id="fEff"><option value="1" selected>Ab erstem Login – Dauer</option><option value="0">Ab Erstellung – fester Ablauf</option></select></label>
+      <label class="field eff0"><span>Gültig (Tage)</span><input id="fDays" type="number" min="1" max="365" value="1"></label>
+      <label class="field eff1"><span>Dauer</span>
+        <span class="inline"><input id="fTime" type="number" min="1" max="365" value="1"><select id="fUnit"><option value="min">Minuten</option><option value="hour">Stunden</option><option value="day" selected>Tage</option></select></span></label>
+      <label class="field"><span>Max. Geräte</span><input id="fMax" type="number" min="0" max="16" placeholder="leer = nicht gesetzt"></label>
+      <label class="field wide"><span>Beschreibung (optional)</span><input id="fDesc" type="text" maxlength="150" placeholder="z. B. Besucher Oktober"></label>
+    </div>
+    <p class="muted small" id="batchHint" hidden>Codes werden zufällig erzeugt und einzeln im NCE angelegt (kann bei vielen Vouchern einen Moment dauern).</p>
+    <div id="createError" class="error" hidden></div>
+    <div class="dlg-actions">
+      <button type="button" class="btn" id="createCancel">Abbrechen</button>
+      <button type="submit" class="btn primary" id="createSubmit">Anlegen</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Dialog: Ergebnis -->
+<dialog id="resultDlg">
+  <h2 id="resultTitle">Ergebnis</h2>
+  <p class="muted small">Die Codes sind nur jetzt sichtbar – bitte drucken oder notieren.</p>
+  <div id="resultBody"></div>
+  <div class="dlg-actions">
+    <button class="btn" id="resultPrint" type="button">QR-Karten drucken</button>
+    <button class="btn primary" id="resultClose" type="button">Schließen</button>
+  </div>
+</dialog>
+
+<!-- Dialog: QR -->
+<dialog id="qrDlg">
+  <div id="qrBox" class="qr-big"></div>
+  <p id="qrCode" class="qr-code"></p>
+  <p id="qrNote" class="muted small"></p>
+  <details class="small"><summary>QR-Inhalt</summary><code id="qrText" class="wrap"></code></details>
+  <div class="dlg-actions">
+    <button class="btn" id="qrDownload" type="button">SVG speichern</button>
+    <button class="btn primary" id="qrClose" type="button">Schließen</button>
+  </div>
+</dialog>
+
+<!-- Dialog: Löschen bestätigen -->
+<dialog id="confirmDlg">
+  <h2>Voucher löschen?</h2>
+  <p id="confirmText"></p>
+  <div class="dlg-actions">
+    <button class="btn" id="confirmNo" type="button">Abbrechen</button>
+    <button class="btn danger solid" id="confirmYes" type="button">Endgültig löschen</button>
+  </div>
+</dialog>
+
+<!-- Dialog: Hinweis -->
+<dialog id="alertDlg">
+  <h2 id="alertTitle"></h2>
+  <p id="alertText" class="pre"></p>
+  <div class="dlg-actions"><button class="btn primary" id="alertClose" type="button">OK</button></div>
+</dialog>
+
+<!-- Dialog: Rohdaten SSID -->
+<dialog id="rawDlg">
+  <h2>NCE-Rohdaten (SSIDs)</h2>
+  <p class="muted small">Probierte Abfragepfade, Beispiel-Datensätze mit Einordnung (Portal / verschlüsselt) und ggf. Online-User – zur Prüfung der Erkennung „Open + Portal“.</p>
+  <pre id="rawPre" class="rawpre">…</pre>
+  <div class="dlg-actions"><button class="btn primary" id="rawClose" type="button">Schließen</button></div>
+</dialog>
+
+<div id="toast" class="toast" hidden></div>
+<div id="printArea" aria-hidden="true"></div>
+
+<script src="vendor/qrcode.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

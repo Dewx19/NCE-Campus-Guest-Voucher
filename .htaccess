@@ -1,0 +1,15 @@
+# Apache: Verzeichnislisting aus, Hilfs- und Konfigurationsdateien sperren
+Options -Indexes
+<FilesMatch "\.(md|json|log|pem|sql)$">
+  Require all denied
+</FilesMatch>
+<Files "config.example.php">
+  Require all denied
+</Files>
+# Versteckte Ordner (z. B. .git) nie ausliefern
+RedirectMatch 404 /\.(git|github)(/|$)
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set Referrer-Policy "no-referrer"
+  Header set X-Frame-Options "DENY"
+</IfModule>

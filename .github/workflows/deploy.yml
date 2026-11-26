@@ -1,0 +1,73 @@
+# Upload von NCE-Campus Guest Voucher auf den Webspace bei jeder Aenderung auf main (lftp, FTPS)
+# Benoetigt: Secrets FTP_SERVER (oder FTP_IP), FTP_USERNAME (oder FTP_USER), FTP_PASSWORD (oder FTP_PASS); Variable FTP_DIR (Zielordner, Standard: FTP-Stammordner)
+# Optional: Variablen FTP_PROTOCOL (ftps | ftp), FTP_PORT (21), FTP_SSL_FINGERPRINT (SHA1 des FTP-Zertifikats,
+#           falls dessen Name nicht zum Host passt), FTP_SSL_VERIFY (yes | no)
+# Ohne FTP-Secrets wird der Upload uebersprungen.
+# config.php, data/ (Laufzeitdaten), Zertifikatsdateien und README werden nie hochgeladen oder veraendert; auf dem Server wird nichts geloescht.
+name: Deploy per FTP
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Nur Zielordner anzeigen, nichts hochladen"
+        type: boolean
+        default: false
+
+concurrency: deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false   # kein Token in .git/config
+
+      - name: lftp installieren
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+
+      - name: Upload per FTP
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER || secrets.FTP_IP }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME || secrets.FTP_USER }}
+          LFTP_PASSWORD: ${{ secrets.FTP_PASSWORD || secrets.FTP_PASS }}
+          FTP_DIR: ${{ vars.FTP_DIR || './' }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL || 'ftps' }}
+          FTP_PORT: ${{ vars.FTP_PORT || '21' }}
+          FTP_SSL_VERIFY: ${{ vars.FTP_SSL_VERIFY || 'yes' }}
+          FTP_SSL_FINGERPRINT: ${{ vars.FTP_SSL_FINGERPRINT }}
+          DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
+        run: |
+          if [ -z "$FTP_SERVER" ] || [ -z "$FTP_USERNAME" ] || [ -z "$LFTP_PASSWORD" ]; then
+            echo "::notice::Keine FTP-Secrets gesetzt (FTP_IP/FTP_SERVER, FTP_USER/FTP_USERNAME, FTP_PASS/FTP_PASSWORD) - Upload uebersprungen."; exit 0
+          fi
+          if [ "$FTP_PROTOCOL" = "ftp" ]; then
+            TLS="set ftp:ssl-allow no;"
+          else
+            TLS="set ftp:ssl-force true; set ftp:ssl-protect-data true; set ssl:verify-certificate $FTP_SSL_VERIFY;"
+            if [ -n "$FTP_SSL_FINGERPRINT" ]; then TLS="$TLS set ssl:verify-certificate/$FTP_SSL_FINGERPRINT no;"; fi
+          fi
+          DIR="${FTP_DIR%/}/"
+          run_lftp() { lftp --env-password -u "$FTP_USERNAME" -p "$FTP_PORT" "$FTP_SERVER" -e "$TLS set ftp:passive-mode true; set net:max-retries 2; set net:timeout 30; $1; bye"; }
+
+          echo "Zielordner ${DIR} enthaelt vor dem Upload:"
+          if ! run_lftp "cd '${DIR}'; cls -1"; then
+            echo "::error::Anmeldung oder Zugriff auf ${DIR} fehlgeschlagen (Meldung siehe oben). FTP-Zugangsdaten bzw. FTP_DIR pruefen."; exit 1
+          fi
+          if [ "$DRY_RUN" = "true" ]; then echo "Nur Anzeige (dry_run) - nichts hochgeladen."; exit 0; fi
+
+          # Sicherheitsnetz: nur hochladen, wenn dort schon der Voucher Manager liegt (api.php + config.php) oder der Ordner leer ist
+          LIST=$(run_lftp "cd '${DIR}'; cls -1" 2>/dev/null | tr -d '\r' || true)
+          if [ -n "$LIST" ] && ! { echo "$LIST" | grep -qx "api.php" && echo "$LIST" | grep -qx "config.php"; }; then
+            echo "::error::Im Zielordner liegt kein Voucher Manager (api.php und config.php fehlen). Upload abgebrochen, damit nichts ueberschrieben wird. FTP_DIR pruefen."; exit 1
+          fi
+
+          # Anwendung hochladen (ohne Git-Daten, README, config.php, Laufzeitdaten und Zertifikate)
+          run_lftp "rm -r -f '${DIR}.git'" || true
+          run_lftp "mirror --reverse --verbose --no-perms --exclude-glob .git/ --exclude-glob .github/ --exclude-glob .gitignore --exclude-glob README.md --exclude-glob config.php --exclude-glob 'nce-ca*.pem' --exclude-glob 'data/*.json' --exclude-glob 'data/*.pem' ./ '${DIR}'"
+
+          # Kontrolle: Es darf kein .git-Ordner auf dem Server liegen
+          if run_lftp "cls -1 '${DIR}.git/'" >/dev/null 2>&1; then echo "::error::.git-Ordner liegt noch auf dem Server"; exit 1; else echo "Kontrolle ok: kein .git-Ordner auf dem Server."; fi

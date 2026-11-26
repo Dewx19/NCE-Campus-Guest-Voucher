@@ -1,0 +1,6 @@
+# Zugangsdaten und Laufzeitdaten bleiben nur auf dem Server
+config.php
+nce-ca*.pem
+data/*
+!data/.htaccess
+*.log
