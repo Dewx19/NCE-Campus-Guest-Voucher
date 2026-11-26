@@ -16,6 +16,7 @@
     <h1>Anmelden</h1>
     <p class="muted">Mit dem Northbound-Account des iMaster NCE-Campus anmelden.</p>
     <div id="loginNotice" class="notice warn" hidden></div>
+    <p class="muted small" id="loginTargetName" hidden></p>
     <label class="field" id="loginTargetField" hidden><span>NCE-Ziel</span><select id="loginTargetSel" name="target"></select></label>
     <label class="field"><span>Benutzername</span><input id="loginUser" name="username" type="text" autocomplete="username" required autofocus></label>
     <label class="field"><span>Passwort</span><input id="loginPass" name="password" type="password" autocomplete="current-password" required></label>
@@ -31,6 +32,7 @@
     <div class="topbar-right">
       <span class="muted small" id="tlsInfo"></span>
       <span class="muted small" id="whoami"></span>
+      <button class="btn ghost" id="settingsBtn" type="button">Einstellungen</button>
       <button class="btn ghost" id="logoutBtn" type="button">Abmelden</button>
     </div>
   </header>
@@ -168,8 +170,54 @@
   <div class="dlg-actions"><button class="btn primary" id="rawClose" type="button">Schließen</button></div>
 </dialog>
 
+<!-- Dialog: Einstellungen (Druckvorlage) -->
+<dialog id="settingsDlg">
+  <form method="dialog" id="settingsForm">
+    <h2>Einstellungen – Voucher-Druck</h2>
+    <p class="muted small">Gilt für alle Benutzer dieser Installation. In den Texten wird <code>{ssid}</code> durch das Gast-WLAN ersetzt.</p>
+    <div class="settings-wrap">
+      <div class="settings-form">
+        <h3>Text</h3>
+        <label class="field"><span>Überschrift</span><input id="sTitle" maxlength="80"></label>
+        <label class="field"><span>Hinweis bei Passcode</span><input id="sHintPasscode" maxlength="200"></label>
+        <label class="field"><span>Hinweis bei Benutzername + Passwort</span><input id="sHintUser" maxlength="200"></label>
+        <label class="field"><span>Fußzeile (optional)</span><input id="sFooter" maxlength="200" placeholder="z. B. Viel Spaß! IT-Service, Tel. 123"></label>
+        <div class="checks">
+          <label><input type="checkbox" id="sShowSsid"> WLAN-Name anzeigen</label>
+          <label><input type="checkbox" id="sShowValid"> Gültigkeit anzeigen</label>
+          <label><input type="checkbox" id="sShowDesc"> Beschreibung anzeigen</label>
+        </div>
+        <h3>Layout</h3>
+        <div class="grid">
+          <label class="field"><span>Karten je Zeile</span><select id="sColumns"><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+          <label class="field"><span>Ausrichtung</span><select id="sAlign"><option value="center">Zentriert</option><option value="left">Linksbündig</option></select></label>
+          <label class="field"><span>QR-Größe: <b id="sQrSizeV"></b> mm</span><input id="sQrSize" type="range" min="20" max="90" step="1"></label>
+          <label class="field"><span>Schriftgröße: <b id="sFontScaleV"></b> %</span><input id="sFontScale" type="range" min="70" max="160" step="5"></label>
+          <label class="field"><span>Abstand: <b id="sGapV"></b> mm</span><input id="sGap" type="range" min="0" max="20" step="1"></label>
+        </div>
+        <div class="checks">
+          <label><input type="checkbox" id="sBorder"> Rahmen (Schnittlinie)</label>
+          <label><input type="checkbox" id="sRounded"> Abgerundete Ecken</label>
+        </div>
+      </div>
+      <div class="settings-preview">
+        <h3>Vorschau</h3>
+        <div id="previewArea" class="print-grid preview"></div>
+        <p class="muted small">Beispieldaten. Breite je Karte entspricht A4 / Karten je Zeile.</p>
+      </div>
+    </div>
+    <div id="settingsError" class="error" hidden></div>
+    <div class="dlg-actions">
+      <button type="button" class="btn" id="settingsReset">Standard wiederherstellen</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn" id="settingsCancel">Abbrechen</button>
+      <button type="submit" class="btn primary" id="settingsSave">Speichern</button>
+    </div>
+  </form>
+</dialog>
+
 <div id="toast" class="toast" hidden></div>
-<div id="printArea" aria-hidden="true"></div>
+<div id="printArea" class="print-grid" aria-hidden="true"></div>
 
 <script src="vendor/qrcode.js"></script>
 <script src="app.js"></script>

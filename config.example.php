@@ -3,17 +3,19 @@
  * NCE-Campus Guest Voucher - Konfiguration (Vorlage)
  * Ersteller: Patrick Brandt
  *
- * Als config.php speichern und ausfuellen. config.php gehoert NICHT ins Repository (siehe .gitignore).
- * Werte der Form <<...>> sind Platzhalter. Diese Datei gibt nur ein Array zurueck; beim direkten
+ * Optional: Ohne config.php nutzt die App die eingebauten Standardwerte (Ziel "Public Cloud Northbound API",
+ * 80.158.58.176:18002). Zum Anpassen als config.php speichern; nur die Werte eintragen, die abweichen sollen
+ * ('targets' ersetzt die Standard-Ziele komplett). config.php gehoert NICHT ins Repository (siehe .gitignore). Diese Datei gibt nur ein Array zurueck; beim direkten
  * Aufruf im Browser wird nichts ausgegeben.
  */
 return [
     // NCE-Ziele (Northbound-API). Ab zwei Eintraegen erscheint beim Login ein Auswahlfeld; der erste ist die Vorauswahl.
     'targets' => [
         [
-            'name'          => 'NCE-Campus',
+            // Public Cloud Northbound API
+            'name'          => 'Public Cloud Northbound API',
             'protocol'      => 'https',
-            'host'          => '<<NCE_HOST: IP oder Hostname der Northbound-API>>',
+            'host'          => '80.158.58.176',
             'port'          => 18002,
             'tlsVerify'     => true,   // false nur zu Testzwecken
             'tlsServerName' => '',     // optional: Name im NCE-Zertifikat, wenn 'host' eine IP ist

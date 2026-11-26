@@ -101,16 +101,41 @@ dialog::backdrop{background:rgba(10,16,26,.5)}
   .page-head{flex-direction:column;align-items:stretch}
   .toolbar input[type=search]{max-width:none;flex:1 1 100%}
 }
+/* Voucher-Karten: Druck und Vorschau nutzen dieselben Regeln, Layout kommt als CSS-Variablen aus den Einstellungen */
+.print-grid{display:grid;grid-template-columns:repeat(var(--cols,3),1fr);gap:var(--gap,10mm);font-family:system-ui,Arial,sans-serif;color:#000}
+.print-grid .pcard{padding:5mm;text-align:center;break-inside:avoid;page-break-inside:avoid;background:#fff;font-size:calc(10pt * var(--fs,1))}
+.print-grid[data-border="1"] .pcard{border:1px solid #888}
+.print-grid[data-rounded="1"] .pcard{border-radius:3mm}
+.print-grid[data-align="left"] .pcard{text-align:left}
+.print-grid .pcard .q svg{width:100%;max-width:var(--qr,42mm);height:auto;display:inline-block}
+.print-grid .pcard .t{font-size:1em;font-weight:700;margin-bottom:2mm}
+.print-grid .pcard .c{font:700 1.3em ui-monospace,Menlo,Consolas,monospace;margin-top:2mm;word-break:break-all}
+.print-grid .pcard .w{font-size:.9em;margin-top:2mm}
+.print-grid .pcard .h{font-size:.8em;color:#444;margin-top:1mm}
+.print-grid .pcard .s{font-size:.8em;color:#444;margin-top:1mm}
+.print-grid .pcard .f{font-size:.8em;margin-top:2mm;padding-top:1.5mm;border-top:1px dashed #bbb}
+#printArea{display:none}
 @media print{
+  @page{size:A4;margin:10mm}
   body{background:#fff;color:#000}
   #loginView,#appView,dialog,.toast{display:none!important}
-  #printArea{display:grid!important;grid-template-columns:repeat(3,1fr);gap:10mm;padding:0}
-  .pcard{border:1px solid #888;border-radius:3mm;padding:5mm;text-align:center;break-inside:avoid;font-family:system-ui,Arial,sans-serif}
-  .pcard svg{width:100%;max-width:42mm;height:auto}
-  .pcard .t{font-size:10pt;font-weight:700;margin-bottom:2mm}
-  .pcard .c{font:700 13pt ui-monospace,Menlo,Consolas,monospace;margin-top:2mm;word-break:break-all}
-  .pcard .s{font-size:8pt;color:#444;margin-top:1mm}
+  #printArea{display:grid!important}
 }
+
+/* Einstellungen */
+#settingsDlg{width:min(980px,calc(100vw - 24px))}
+.settings-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;margin-top:8px}
+.settings-wrap h3{font-size:14px;margin:14px 0 8px}
+.settings-wrap h3:first-child{margin-top:0}
+.settings-form .field{margin-bottom:10px}
+.checks{display:flex;flex-wrap:wrap;gap:6px 18px;margin:4px 0 6px;font-size:14px}
+.checks label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.checks input{width:auto}
+input[type=range]{padding:0;border:0;background:none}
+.settings-preview{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px;overflow:hidden}
+.print-grid.preview{width:190mm;zoom:.5;background:#fff;padding:4mm}
+.dlg-actions .spacer{flex:1}
+@media (max-width:760px){ .settings-wrap{grid-template-columns:1fr} }
 
 .groupbar{display:flex;align-items:center;gap:12px;padding:10px 14px;margin-bottom:14px;flex-wrap:wrap}
 .groupbar select{max-width:340px}
@@ -125,4 +150,3 @@ dialog::backdrop{background:rgba(10,16,26,.5)}
 .result-list + .error{margin-top:12px}
 #rawDlg{width:min(860px,calc(100vw - 24px))}
 .rawpre{background:#0f1520;color:#d6deeb;padding:12px;border-radius:8px;max-height:60vh;overflow:auto;font-size:12px;white-space:pre}
-@media print{ .pcard .w{font-size:9pt;margin-top:2mm} .pcard .h{font-size:8pt;color:#444;margin-top:1mm} }

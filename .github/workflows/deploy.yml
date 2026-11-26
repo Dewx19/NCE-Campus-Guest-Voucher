@@ -63,10 +63,10 @@ jobs:
           fi
           if [ "$DRY_RUN" = "true" ]; then echo "Nur Anzeige (dry_run) - nichts hochgeladen."; exit 0; fi
 
-          # Sicherheitsnetz: nur hochladen, wenn dort schon der Voucher Manager liegt (api.php + config.php) oder der Ordner leer ist
+          # Sicherheitsnetz: nur hochladen, wenn dort schon der Voucher Manager liegt (api.php + index.html) oder der Ordner leer ist
           LIST=$(run_lftp "cd '${DIR}'; cls -1" 2>/dev/null | tr -d '\r' || true)
-          if [ -n "$LIST" ] && ! { echo "$LIST" | grep -qx "api.php" && echo "$LIST" | grep -qx "config.php"; }; then
-            echo "::error::Im Zielordner liegt kein Voucher Manager (api.php und config.php fehlen). Upload abgebrochen, damit nichts ueberschrieben wird. FTP_DIR pruefen."; exit 1
+          if [ -n "$LIST" ] && ! { echo "$LIST" | grep -qx "api.php" && echo "$LIST" | grep -qx "index.html"; }; then
+            echo "::error::Im Zielordner liegt kein Voucher Manager (api.php und index.html fehlen). Upload abgebrochen, damit nichts ueberschrieben wird. FTP_DIR pruefen."; exit 1
           fi
 
           # Anwendung hochladen (ohne Git-Daten, README, config.php, Laufzeitdaten und Zertifikate)

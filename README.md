@@ -9,7 +9,7 @@ Web-App für WLAN-Gast-Voucher im iMaster NCE-Campus: Login gegen den NCE, Vouch
 
 ## Einrichtung
 
-1. `config.example.php` als `config.php` speichern und ausfüllen (mindestens `targets` → `host`). **`config.php` nie ins Repository legen** (siehe `.gitignore`).
+1. Optional: `config.example.php` als `config.php` speichern und anpassen. Ohne `config.php` gelten die eingebauten Standardwerte (Ziel „Public Cloud Northbound API“, `80.158.58.176:18002`). **`config.php` nie ins Repository legen** (siehe `.gitignore`).
 2. Alle Dateien hochladen, auch den Ordner `data/` mit seiner `.htaccess`. Der Ordner `data/` muss für PHP beschreibbar sein.
 3. Seite per HTTPS aufrufen und mit dem NCE-Northbound-Account anmelden (Typ *Third-party*, Rolle *Open Api Operator*).
 
@@ -25,6 +25,7 @@ Web-App für WLAN-Gast-Voucher im iMaster NCE-Campus: Login gegen den NCE, Vouch
 
 Der QR-Code verbindet das Handy mit dem Gast-WLAN (`WIFI:S:<SSID>;T:nopass;;`). Danach öffnet sich die Portal-Anmeldeseite, dort wird der Code eingegeben.
 
+* **Einstellungen** (oben rechts): Texte (Überschrift, Hinweise, Fußzeile, `{ssid}` als Platzhalter), angezeigte Felder und Layout (Karten je Zeile, QR-Größe, Schriftgröße, Abstand, Ausrichtung, Rahmen) der Druckkarten, mit Vorschau. Gespeichert in `data/print.json` für alle Benutzer der Installation.
 * Die App liest die SSIDs aller Sites aus dem NCE und zeigt die mit **Open + Portal** zuerst. Ist die SSID-Konfiguration nicht lesbar, zeigt sie die SSIDs mit aktuell angemeldeten Portal-Gästen. Jede SSID kann auch von Hand eingetragen werden; Vorgabe: `qr.ssid` in `config.php`.
 * Der Knopf **Rohdaten** zeigt die probierten Abfragepfade und Beispiel-Datensätze mit der Einordnung (Portal / verschlüsselt).
 
@@ -40,7 +41,7 @@ Der QR-Code verbindet das Handy mit dem Gast-WLAN (`WIFI:S:<SSID>;T:nopass;;`). 
 `.github/workflows/deploy.yml` lädt jede Änderung auf `main` per FTPS (lftp) auf den Webspace. Ohne FTP-Secrets wird der Upload übersprungen.
 
 * **Nie hochgeladen oder verändert:** `config.php`, `data/`-Laufzeitdaten, Zertifikatsdateien, `README.md`, Git-Daten. Auf dem Server wird nichts gelöscht.
-* **Sicherheitsnetz:** Der Upload bricht ab, wenn im Zielordner Dateien liegen, aber keine App (`api.php` und `config.php`).
+* **Sicherheitsnetz:** Der Upload bricht ab, wenn im Zielordner Dateien liegen, aber keine App (`api.php` und `index.html`).
 * **Probelauf:** *Actions → Deploy per FTP → Run workflow* mit „Nur Zielordner anzeigen“.
 
 Einstellungen unter *Settings → Secrets and variables → Actions*:
