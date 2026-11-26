@@ -201,11 +201,46 @@ function tls_info() {
         $info['subject'] = $c['subject']['CN'] ?? null;
         $info['validTo'] = $c['validTo_time_t'] ?? null;
     }
+    $n = tls_name();
+    if (strcasecmp($n, $NCE['host']) !== 0) $info['checkName'] = $n;
     return $info;
+}
+/**
+ * Name, gegen den das NCE-Zertifikat geprueft wird. Vorrang hat tlsServerName aus der Konfiguration.
+ * Sonst: Ist das Zertifikat nicht auf den Host bzw. die IP ausgestellt, wird der erste Name aus dem
+ * gespeicherten Zertifikat (SAN, sonst CN) verwendet - verbunden wird weiterhin mit der IP.
+ */
+function tls_name() {
+    global $NCE;
+    static $cache = [];
+    if ($NCE['tlsServerName'] !== '') return $NCE['tlsServerName'];
+    $host = strtolower($NCE['host']);
+    if (!tls_needed() || !($ca = ca_file()) || !is_file($ca) || !function_exists('openssl_x509_parse')) return $host;
+    $key = $ca . '|' . @filemtime($ca) . '|' . $host;
+    if (isset($cache[$key])) return $cache[$key];
+    $pem = (string)@file_get_contents($ca);
+    if (!preg_match('/-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----/s', $pem, $m) || !($c = @openssl_x509_parse($m[0]))) return $cache[$key] = $host;
+    $dns = []; $ips = [];
+    foreach (explode(',', (string)($c['extensions']['subjectAltName'] ?? '')) as $e) {
+        $e = trim($e);
+        if (stripos($e, 'DNS:') === 0) $dns[] = strtolower(trim(substr($e, 4)));
+        elseif (stripos($e, 'IP Address:') === 0) $ips[] = strtolower(trim(substr($e, 11)));
+    }
+    $cn = strtolower((string)($c['subject']['CN'] ?? ''));
+    if (in_array($host, $ips, true) || in_array($host, $dns, true)) return $cache[$key] = $host;
+    foreach ($dns as $d) if (strpos($d, '*.') === 0 && preg_match('/^[^.]+' . preg_quote(substr($d, 1), '/') . '$/', $host)) return $cache[$key] = $host;
+    if (!$dns && $cn === $host) return $cache[$key] = $host;
+    $name = $dns[0] ?? $cn;
+    if ($name === '') return $cache[$key] = $host;
+    if (strpos($name, '*.') === 0) $name = 'nce' . substr($name, 1); // Wildcard: beliebigen passenden Namen verwenden
+    return $cache[$key] = $name;
 }
 function tls_hint($r) {
     if (stripos((string)$r['err'], 'certificate') === false && stripos((string)$r['err'], 'SSL') === false) return '';
     $x = ca_file(true);
+    if (preg_match('/(subject name|host name|hostname)/i', (string)$r['err'])) {
+        return ' Hinweis: Das Zertifikat ist nicht auf diesen Host ausgestellt. In config.php tlsServerName auf den Namen im Zertifikat setzen.';
+    }
     if (!$x) return ' Hinweis: Der Webspace kennt die Zertifizierungsstelle des NCE nicht.';
     if (!is_file($x[1])) return ' Hinweis: Die CA-Datei ' . basename($x[1]) . ' wurde nicht gefunden (caFile in config.php pruefen).';
     $where = $x[0] === 'auto' ? 'data/' . basename($x[1]) : basename($x[1]);
@@ -220,9 +255,11 @@ function nce_curl($method, $path, $token = null, $body = null, $query = null) {
     global $CFG, $NCE;
     $host = $NCE['host'];
     $resolve = null;
-    if ($NCE['protocol'] === 'https' && $NCE['tlsServerName'] !== '' && $NCE['tlsServerName'] !== $host) {
-        $resolve = [$NCE['tlsServerName'] . ':' . $NCE['port'] . ':' . $host]; // per IP verbinden, Zertifikat gegen den Namen pruefen
-        $host = $NCE['tlsServerName'];
+    $name = $NCE['protocol'] === 'https' ? tls_name() : $host;
+    if ($name !== '' && strcasecmp($name, $host) !== 0) {
+        $ip = strpos($host, ':') !== false ? '[' . $host . ']' : $host;
+        $resolve = [$name . ':' . $NCE['port'] . ':' . $ip]; // per IP verbinden, Zertifikat gegen den Namen pruefen
+        $host = $name;
     }
     $url = $NCE['protocol'] . '://' . $host . ':' . $NCE['port'] . $path;
     if ($query) {

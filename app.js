@@ -109,7 +109,7 @@
     const t = state.cfg.tls || {};
     $('tlsInfo').textContent = TLS_TXT[t.mode] || '';
     $('tlsInfo').title = t.mode === 'verified'
-      ? [t.subject && 'Zertifikat: ' + t.subject, t.validTo && 'gültig bis ' + new Date(t.validTo * 1000).toLocaleDateString('de-DE'),
+      ? [t.subject && 'Zertifikat: ' + t.subject, t.checkName && 'geprüft gegen den Namen ' + t.checkName, t.validTo && 'gültig bis ' + new Date(t.validTo * 1000).toLocaleDateString('de-DE'),
          t.source === 'auto' && t.since ? 'automatisch übernommen am ' + new Date(t.since * 1000).toLocaleDateString('de-DE') : null].filter(Boolean).join('\n')
       : '';
     notice($('appNotice'));
