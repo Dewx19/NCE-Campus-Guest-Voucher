@@ -1,5 +1,10 @@
 # NCE-Campus Guest Voucher
 
+> [!CAUTION]
+> **Haftungsausschluss: Dieses Repository wird nicht von Huawei zur Verfügung gestellt. Huawei ist für dieses Repository und seinen Inhalt in keiner Weise verantwortlich.**
+>
+> **Jeder Nutzer soll und muss den Code selbst verifizieren und validieren, bevor er ihn einsetzt. Der Code dient lediglich als Inspiration und wird ohne jede Gewähr bereitgestellt.**
+
 Ersteller: Patrick Brandt
 
 Web-App für WLAN-Gast-Voucher im iMaster NCE-Campus: Login gegen den NCE, Voucher-Liste, Einzel- und Batch-Anlage, Löschen, QR-Code je Voucher und Druckkarten.
@@ -26,7 +31,7 @@ Web-App für WLAN-Gast-Voucher im iMaster NCE-Campus: Login gegen den NCE, Vouch
 Der QR-Code verbindet das Handy mit dem Gast-WLAN (`WIFI:S:<SSID>;T:nopass;;`). Danach öffnet sich die Portal-Anmeldeseite, dort wird der Code eingegeben.
 
 * **Einstellungen** (oben rechts): Texte (Überschrift, Hinweise, Fußzeile, `{ssid}` als Platzhalter), angezeigte Felder und Layout (Karten je Zeile, QR-Größe, Schriftgröße, Abstand, Ausrichtung, Rahmen) der Druckkarten, mit Vorschau. Gespeichert in `data/print.json` für alle Benutzer der Installation.
-* Die App liest die SSIDs aller Sites aus dem NCE und zeigt nur die mit **Open + Portal** (andere werden ausgeblendet). Ist die SSID-Konfiguration nicht lesbar, zeigt sie die SSIDs mit aktuell angemeldeten Portal-Gästen. Jede SSID kann auch von Hand eingetragen werden; Vorgabe: `qr.ssid` in `config.php`.
+* Die App liest die SSIDs aller Sites aus dem NCE und zeigt nur die mit **Open + Portal** (andere werden ausgeblendet). Ist die SSID-Konfiguration nicht lesbar, zeigt sie die SSIDs mit aktuell angemeldeten Portal-Gästen. Eine feste SSID kann zusätzlich über `qr.ssid` in `config.php` vorgegeben werden.
 * Der Knopf **Rohdaten** zeigt die probierten Abfragepfade und Beispiel-Datensätze mit der Einordnung (Portal / verschlüsselt).
 
 ### Sicherheit

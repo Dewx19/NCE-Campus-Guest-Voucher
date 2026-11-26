@@ -49,7 +49,7 @@
   function qrSvg(text, opts = { cellSize: 4, margin: 0, scalable: true }) {
     const q = qrcode(0, 'M'); q.addData(text); q.make(); return q.createSvgTag(opts);
   }
-  const currentSsid = () => ($('ssidSel').value === '__manual' ? $('ssidManual').value.trim() : $('ssidSel').value) || '';
+  const currentSsid = () => $('ssidSel').value || '';
   // Standardformat WIFI:S:<ssid>;T:nopass;;  (Sonderzeichen \ ; , : " werden maskiert)
   const wifiQr = (ssid) => 'WIFI:S:' + ssid.replace(/([\\;,:"])/g, '\\$1') + ';T:nopass;;';
   const codeOf = (v) => v.passcode || v.userName || '';
@@ -123,36 +123,32 @@
     const sel = $('ssidSel'), info = $('ssidInfo');
     const saved = store.get('gv_ssid');
     const pre = saved !== null ? saved : state.cfg.ssid;
-    let list = [], hidden = new Set();
+    let list = [];
     info.textContent = 'Suche SSIDs im NCE …';
     try {
       const r = await api('ssids');
       list = r.ssids || [];
       const all = list;
       list = all.filter((x) => x.openPortal); // nur Open + Portal anzeigen
-      info.textContent = !all.length ? 'Keine SSIDs gefunden – bitte SSID eingeben. „Rohdaten“ zeigt die Antworten des NCE.'
-        : !list.length ? `Keine SSID mit Open + Portal erkannt (${all.length} andere ausgeblendet) – bitte SSID eingeben oder „Rohdaten“ prüfen.`
+      info.textContent = !all.length ? 'Keine SSIDs gefunden – „Rohdaten“ zeigt die Antworten des NCE.'
+        : !list.length ? `Keine SSID mit Open + Portal erkannt (${all.length} andere ausgeblendet) – bitte „Rohdaten“ prüfen.`
         : all[0].source === 'online' ? `Keine SSID-Konfiguration lesbar – ${list.length} SSID(s) mit angemeldeten Portal-Gästen.`
         : `${list.length} SSID(s) mit Open + Portal (aus ${r.sites} Site(s))` + (all.length > list.length ? `, ${all.length - list.length} weitere ausgeblendet.` : '.');
-      hidden = new Set(all.filter((x) => !x.openPortal).map((x) => x.ssid));
-    } catch (e) { if (!quiet(e)) info.textContent = 'SSIDs nicht abrufbar (' + e.message + ') – bitte SSID eingeben.'; }
+    } catch (e) { if (!quiet(e)) info.textContent = 'SSIDs nicht abrufbar (' + e.message + ').'; }
     const opt = (x) => el('option', { value: x.ssid, text: x.ssid + (x.sites.length ? ` (${x.sites.join(', ')})` : '') + (x.source === 'online' ? ` – ${x.users} Gast/Gäste online` : '') });
+    // Vorgabe aus config.php (qr.ssid) nur, wenn sie nicht ohnehin erkannt wurde
+    const cfgSsid = state.cfg.ssid && !list.some((x) => x.ssid === state.cfg.ssid) ? state.cfg.ssid : '';
     sel.replaceChildren(
       el('option', { value: '', text: '– SSID wählen –' }),
       ...list.map(opt),
-      el('option', { value: '__manual', text: 'Andere SSID eingeben …' }));
+      ...(cfgSsid ? [el('option', { value: cfgSsid, text: cfgSsid + ' (Vorgabe aus config.php)' })] : []));
     if (pre && list.some((x) => x.ssid === pre)) sel.value = pre;
-    else if (pre && !hidden.has(pre)) { sel.value = '__manual'; $('ssidManual').value = pre; }
+    else if (cfgSsid) sel.value = cfgSsid;
     else if (list.length === 1) sel.value = list[0].ssid;
-    $('ssidManual').hidden = sel.value !== '__manual';
     ssidChanged();
   }
   function ssidChanged() { store.set('gv_ssid', currentSsid()); render(); }
-  $('ssidSel').addEventListener('change', () => {
-    const m = $('ssidSel').value === '__manual'; $('ssidManual').hidden = !m; if (m) $('ssidManual').focus();
-    ssidChanged();
-  });
-  $('ssidManual').addEventListener('change', ssidChanged);
+  $('ssidSel').addEventListener('change', ssidChanged);
   async function showRaw(route, title, info) {
     $('rawTitle').textContent = title; $('rawInfo').textContent = info;
     $('rawPre').textContent = 'Lade …'; $('rawDlg').showModal();
