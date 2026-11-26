@@ -431,17 +431,29 @@ function flat($a, $prefix = '') {
     }
     return $out;
 }
-/** Einordnung einer SSID: Portal-Authentifizierung? Verschluesselt (PSK/802.1X)? */
+/** Einordnung einer SSID: Portal-Authentifizierung? Verschluesselt (PSK/802.1X)?
+ *  Liefert der NCE ssidAuth.mode (z. B. "open"), ist dieses Feld fuer offen/verschluesselt massgeblich. */
 function classify_ssid($rec) {
     $portal = false; $secured = false; $open = false;
-    foreach (flat($rec) as $k => $v) {
+    $f = flat($rec);
+    $mode = null;
+    foreach ($f as $k => $v) if (preg_match('/(^|\.)ssidauth\.(mode|authmode)$/', $k)) { $mode = $v; break; }
+    foreach ($f as $k => $v) {
         $isAuthKey = preg_match('/(auth|secur|encrypt|policy|mode|type)/', $k);
-        if (strpos($k, 'portal') !== false && !preg_match('/^(false|0|off|disable|disabled|none|)$/', $v) && !preg_match('/(free|escape|bypass)/', $k)) $portal = true;
-        if ($isAuthKey && strpos($v, 'portal') !== false) $portal = true;
-        if ($isAuthKey && preg_match('/(wpa|psk|802\.1x|dot1x|ppsk|wep|sae|enterprise)/', $v)) $secured = true;
-        if ($isAuthKey && preg_match('/^(open|none|no-?auth|open-?portal|open\+portal)/', $v)) $open = true;
+        $off = preg_match('/^(false|0|off|disable|disabled|none|null|)$/', $v);
+        if (preg_match('/(portal|webauth|pushpage)/', $k) && !$off && !preg_match('/(free|escape|bypass)/', $k)) $portal = true;
+        if ($isAuthKey && preg_match('/(portal|webauth|web-auth)/', $v)) $portal = true;
+        if ($mode === null) {
+            if ($isAuthKey && preg_match('/(wpa|psk|802\.1x|dot1x|ppsk|wep|sae|enterprise)/', $v)) $secured = true;
+            if ($isAuthKey && preg_match('/^(open|none|no-?auth|open-?portal|open\+portal)/', $v)) $open = true;
+        }
     }
-    return ['portal' => $portal, 'openPortal' => $portal && (!$secured || $open)];
+    if ($mode !== null) {
+        $open = (bool)preg_match('/^(open|none|no-?auth)/', $mode);
+        $secured = !$open;
+        if (strpos($mode, 'portal') !== false) { $portal = true; $open = true; $secured = false; }
+    }
+    return ['mode' => $mode, 'portal' => $portal, 'openPortal' => $portal && (!$secured || $open)];
 }
 function load_ssids($token, $raw = false) {
     $sites = load_sites($token);
@@ -491,6 +503,42 @@ function load_ssids($token, $raw = false) {
     $res = ['ssids' => $list, 'sites' => count($sites), 'errors' => array_slice($errors, 0, 10)];
     if ($raw) $res += ['endpoint' => $ep !== null ? SSID_CANDIDATES[$ep] : null, 'versuchtePfade' => $tried, 'beispiele' => $samples, 'onlineUserBeispiele' => $online];
     return $res;
+}
+
+/** Code/Passwort aus einem NCE-Datensatz - maskierte Werte (****) zaehlen nicht. */
+function secret_of($u, $keys) {
+    $v = pick($u, $keys);
+    if ($v === null) return null;
+    $v = (string)$v;
+    return ($v === '' || preg_match('/^[*\x{2022}]+$/u', $v)) ? null : $v;
+}
+
+/** Rohdaten der Voucher-Abfrage zur Pruefung, welche Felder der NCE liefert (nur angemeldet). */
+function voucher_raw($token, $groupId, $all, $total) {
+    $fields = [];
+    foreach ($all as $u) if (is_array($u)) foreach (array_keys(flat($u)) as $k) $fields[$k] = ($fields[$k] ?? 0) + 1;
+    ksort($fields);
+    $hint = array_values(array_filter(array_keys($fields), function ($k) { return preg_match('/(pass|code|pwd|secret|key)/', $k); }));
+    $res = [
+        'abfrage'      => ['pfad' => '/controller/campus/v2/accountservice/accessuser/users', 'userGroupId' => $groupId],
+        'anzahl'       => count($all),
+        'totalRecords' => $total,
+        'felder'       => $fields,
+        'moeglicheCodeFelder' => $hint,
+        'beispiele'    => array_slice($all, 0, 5),
+    ];
+    // Versuch: Detailabfrage eines einzelnen Vouchers (liefert evtl. mehr Felder als die Liste)
+    $first = null;
+    foreach ($all as $u) if (is_array($u) && !empty($u['id'])) { $first = $u; if ((int)($u['userType'] ?? 0) === 6) break; }
+    if ($first) {
+        foreach (['/controller/campus/v2/accountservice/accessuser/users/%s', '/controller/campus/v1/accountservice/users/%s'] as $path) {
+            $r = nce('GET', sprintf($path, rawurlencode((string)$first['id'])), $token);
+            if ($r['status'] === 401) lost_session();
+            $res['detailVersuche'][] = ['pfad' => $path, 'id' => (string)$first['id'], 'status' => $r['status'],
+                'ergebnis' => nce_ok($r) ? ($r['json']['data'] ?? $r['json']) : nce_msg($r)];
+        }
+    }
+    send(200, $res);
 }
 
 // =====================================================================
@@ -597,7 +645,7 @@ if ($method === 'GET' && ($route === 'ssids' || $route === 'ssids/raw')) {
     send(200, load_ssids($token, $route === 'ssids/raw'));
 }
 
-if ($method === 'GET' && $route === 'vouchers') {
+if ($method === 'GET' && ($route === 'vouchers' || $route === 'vouchers/raw')) {
     // Live aus dem NCE. Passcodes und Passwoerter liefert die NBI in der Regel nicht zurueck - sie werden nur
     // angezeigt, wenn der NCE sie mitliefert (oder direkt nach dem Anlegen im Browser).
     $groupId = require_group();
@@ -611,6 +659,7 @@ if ($method === 'GET' && $route === 'vouchers') {
         $all = array_merge($all, $data);
         if (count($all) >= $total || !$data) break;
     }
+    if ($route === 'vouchers/raw') voucher_raw($token, $groupId, $all, $total);
     $nowMs = (int)(microtime(true) * 1000);
     $vouchers = [];
     foreach ($all as $u) {
@@ -622,8 +671,8 @@ if ($method === 'GET' && $route === 'vouchers') {
             'id'          => (string)$u['id'],
             'userType'    => $type,
             'userName'    => $type === 6 ? null : (($u['userName'] ?? '') ?: null),
-            'passcode'    => $type === 6 ? (pick($u, ['passcode', 'passCode']) ?? null) : null,
-            'password'    => $type === 6 ? null : (pick($u, ['password']) ?? null),
+            'passcode'    => $type === 6 ? secret_of($u, ['passcode', 'passCode', 'accessCode', 'guestPasscode', 'password', 'passWord']) : null,
+            'password'    => $type === 6 ? null : secret_of($u, ['password', 'passWord']),
             'description' => strip_marker($u['description'] ?? ''),
             'marker'      => $marker,
             'batch'       => $batch,

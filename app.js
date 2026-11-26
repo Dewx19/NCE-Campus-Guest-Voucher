@@ -152,10 +152,22 @@
     ssidChanged();
   });
   $('ssidManual').addEventListener('change', ssidChanged);
-  $('ssidRaw').addEventListener('click', async () => {
+  async function showRaw(route, title, info) {
+    $('rawTitle').textContent = title; $('rawInfo').textContent = info;
     $('rawPre').textContent = 'Lade …'; $('rawDlg').showModal();
-    try { $('rawPre').textContent = JSON.stringify(await api('ssids/raw'), null, 2); }
+    try { $('rawPre').textContent = JSON.stringify(await api(route), null, 2); }
     catch (e) { if (quiet(e)) $('rawDlg').close(); else $('rawPre').textContent = 'Fehler: ' + e.message; }
+  }
+  $('ssidRaw').addEventListener('click', () => showRaw('ssids/raw', 'NCE-Rohdaten (SSIDs)',
+    'Probierte Abfragepfade, Beispiel-Datensätze mit Einordnung (ssidAuth.mode, Portal) und ggf. Online-User – zur Prüfung der Erkennung „Open + Portal“.'));
+  $('voucherRaw').addEventListener('click', () => {
+    if (!$('groupSel').value) return toast('Bitte zuerst eine Gast-Benutzergruppe wählen.');
+    showRaw('vouchers/raw', 'NCE-Rohdaten (Voucher)',
+      'Antwort des NCE für die gewählte Gruppe: alle gelieferten Feldnamen, mögliche Code-Felder, bis zu 5 Beispiel-Datensätze und Versuche einer Detailabfrage. Enthält ggf. Zugangscodes – nur intern weitergeben.');
+  });
+  $('rawCopy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText($('rawPre').textContent); toast('In die Zwischenablage kopiert.'); }
+    catch (_) { toast('Kopieren nicht möglich – bitte markieren und kopieren.'); }
   });
   $('rawClose').addEventListener('click', () => $('rawDlg').close());
 

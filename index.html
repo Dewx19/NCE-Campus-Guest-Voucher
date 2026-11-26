@@ -72,6 +72,7 @@
       <span class="spacer"></span>
       <button class="btn" id="printBtn" type="button" disabled>QR-Karten drucken</button>
       <button class="btn danger" id="deleteBtn" type="button" disabled>Löschen</button>
+      <button class="btn ghost" id="voucherRaw" type="button" title="Original-Antworten des NCE zur Voucher-Abfrage">Rohdaten</button>
       <button class="btn" id="refreshBtn" type="button" title="Neu laden">↻</button>
     </div>
 
@@ -162,12 +163,15 @@
   <div class="dlg-actions"><button class="btn primary" id="alertClose" type="button">OK</button></div>
 </dialog>
 
-<!-- Dialog: Rohdaten SSID -->
+<!-- Dialog: Rohdaten (SSIDs / Voucher) -->
 <dialog id="rawDlg">
-  <h2>NCE-Rohdaten (SSIDs)</h2>
-  <p class="muted small">Probierte Abfragepfade, Beispiel-Datensätze mit Einordnung (Portal / verschlüsselt) und ggf. Online-User – zur Prüfung der Erkennung „Open + Portal“.</p>
+  <h2 id="rawTitle">NCE-Rohdaten</h2>
+  <p class="muted small" id="rawInfo"></p>
   <pre id="rawPre" class="rawpre">…</pre>
-  <div class="dlg-actions"><button class="btn primary" id="rawClose" type="button">Schließen</button></div>
+  <div class="dlg-actions">
+    <button class="btn" id="rawCopy" type="button">Kopieren</button>
+    <button class="btn primary" id="rawClose" type="button">Schließen</button>
+  </div>
 </dialog>
 
 <!-- Dialog: Einstellungen (Druckvorlage) -->
