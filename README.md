@@ -18,7 +18,7 @@ Web-App für WLAN-Gast-Voucher im iMaster NCE-Campus: Login gegen den NCE, Vouch
 ### Live-Daten
 
 * Die Liste kommt bei jedem Laden direkt aus dem NCE (Gäste der gewählten Benutzergruppe).
-* **Passcodes und Passwörter** gibt die NBI nach dem Anlegen nicht zurück. Sie sind deshalb nur direkt nach dem Anlegen sichtbar – im Ergebnisdialog und in der Liste, bis die Seite neu geladen wird. Dann drucken oder notieren. Benutzernamen (Typ Benutzer/Passwort) zeigt die Liste immer.
+* **Passcodes** liefert der NCE im Feld `userName` mit – Liste, QR-Code und Druck funktionieren daher auch für Voucher, die direkt im NCE angelegt wurden. **Passwörter** von Benutzer/Passwort-Vouchern gibt die NBI nicht zurück; sie sind nur direkt nach dem Anlegen sichtbar (bis die Seite neu geladen wird).
 * Neue Voucher tragen im Beschreibungsfeld eine Markierung `VM:<Batch>-<Nr>`, darüber ordnet die App sie dem Anlage-Durchlauf zu.
 
 ### QR-Code

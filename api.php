@@ -646,8 +646,8 @@ if ($method === 'GET' && ($route === 'ssids' || $route === 'ssids/raw')) {
 }
 
 if ($method === 'GET' && ($route === 'vouchers' || $route === 'vouchers/raw')) {
-    // Live aus dem NCE. Passcodes und Passwoerter liefert die NBI in der Regel nicht zurueck - sie werden nur
-    // angezeigt, wenn der NCE sie mitliefert (oder direkt nach dem Anlegen im Browser).
+    // Live aus dem NCE. Bei Passcode-Vouchern (Typ 6) liefert der NCE den Passcode im Feld userName.
+    // Passwoerter von Benutzer/Passwort-Vouchern (Typ 20) gibt die NBI nicht zurueck.
     $groupId = require_group();
     $all = []; $total = 0;
     for ($page = 1; $page <= 10; $page++) {
@@ -671,7 +671,7 @@ if ($method === 'GET' && ($route === 'vouchers' || $route === 'vouchers/raw')) {
             'id'          => (string)$u['id'],
             'userType'    => $type,
             'userName'    => $type === 6 ? null : (($u['userName'] ?? '') ?: null),
-            'passcode'    => $type === 6 ? secret_of($u, ['passcode', 'passCode', 'accessCode', 'guestPasscode', 'password', 'passWord']) : null,
+            'passcode'    => $type === 6 ? (secret_of($u, ['passcode', 'passCode', 'accessCode', 'guestPasscode']) ?? secret_of($u, ['userName'])) : null,
             'password'    => $type === 6 ? null : secret_of($u, ['password', 'passWord']),
             'description' => strip_marker($u['description'] ?? ''),
             'marker'      => $marker,
