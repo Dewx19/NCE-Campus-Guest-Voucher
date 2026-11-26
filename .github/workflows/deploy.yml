@@ -15,6 +15,10 @@ on:
         description: "Nur Zielordner anzeigen, nichts hochladen"
         type: boolean
         default: false
+      ssl_fingerprint:
+        description: "Optional: SHA1-Fingerabdruck des FTP-Zertifikats (sonst Variable FTP_SSL_FINGERPRINT)"
+        type: string
+        default: ""
 
 concurrency: deploy
 
@@ -38,7 +42,7 @@ jobs:
           FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL || 'ftps' }}
           FTP_PORT: ${{ vars.FTP_PORT || '21' }}
           FTP_SSL_VERIFY: ${{ vars.FTP_SSL_VERIFY || 'yes' }}
-          FTP_SSL_FINGERPRINT: ${{ vars.FTP_SSL_FINGERPRINT }}
+          FTP_SSL_FINGERPRINT: ${{ inputs.ssl_fingerprint || vars.FTP_SSL_FINGERPRINT }}
           DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
         run: |
           if [ -z "$FTP_SERVER" ] || [ -z "$FTP_USERNAME" ] || [ -z "$LFTP_PASSWORD" ]; then
