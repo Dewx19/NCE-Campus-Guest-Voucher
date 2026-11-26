@@ -123,26 +123,27 @@
     const sel = $('ssidSel'), info = $('ssidInfo');
     const saved = store.get('gv_ssid');
     const pre = saved !== null ? saved : state.cfg.ssid;
-    let list = [];
+    let list = [], hidden = new Set();
     info.textContent = 'Suche SSIDs im NCE …';
     try {
       const r = await api('ssids');
       list = r.ssids || [];
-      const op = list.filter((x) => x.openPortal).length;
-      info.textContent = !list.length ? 'Keine SSIDs gefunden – bitte SSID eingeben. „Rohdaten“ zeigt die Antworten des NCE.'
-        : list[0].source === 'online' ? `Keine SSID-Konfiguration lesbar – ${list.length} SSID(s) mit angemeldeten Portal-Gästen.`
-        : `${op} von ${list.length} SSID(s) mit Open + Portal (aus ${r.sites} Site(s)).`;
+      const all = list;
+      list = all.filter((x) => x.openPortal); // nur Open + Portal anzeigen
+      info.textContent = !all.length ? 'Keine SSIDs gefunden – bitte SSID eingeben. „Rohdaten“ zeigt die Antworten des NCE.'
+        : !list.length ? `Keine SSID mit Open + Portal erkannt (${all.length} andere ausgeblendet) – bitte SSID eingeben oder „Rohdaten“ prüfen.`
+        : all[0].source === 'online' ? `Keine SSID-Konfiguration lesbar – ${list.length} SSID(s) mit angemeldeten Portal-Gästen.`
+        : `${list.length} SSID(s) mit Open + Portal (aus ${r.sites} Site(s))` + (all.length > list.length ? `, ${all.length - list.length} weitere ausgeblendet.` : '.');
+      hidden = new Set(all.filter((x) => !x.openPortal).map((x) => x.ssid));
     } catch (e) { if (!quiet(e)) info.textContent = 'SSIDs nicht abrufbar (' + e.message + ') – bitte SSID eingeben.'; }
     const opt = (x) => el('option', { value: x.ssid, text: x.ssid + (x.sites.length ? ` (${x.sites.join(', ')})` : '') + (x.source === 'online' ? ` – ${x.users} Gast/Gäste online` : '') });
-    const portal = list.filter((x) => x.openPortal), other = list.filter((x) => !x.openPortal);
     sel.replaceChildren(
       el('option', { value: '', text: '– SSID wählen –' }),
-      ...(portal.length ? [el('optgroup', { label: 'Open + Portal' }, portal.map(opt))] : []),
-      ...(other.length ? [el('optgroup', { label: 'Weitere SSIDs' }, other.map(opt))] : []),
+      ...list.map(opt),
       el('option', { value: '__manual', text: 'Andere SSID eingeben …' }));
     if (pre && list.some((x) => x.ssid === pre)) sel.value = pre;
-    else if (pre) { sel.value = '__manual'; $('ssidManual').value = pre; }
-    else if (portal.length === 1) sel.value = portal[0].ssid;
+    else if (pre && !hidden.has(pre)) { sel.value = '__manual'; $('ssidManual').value = pre; }
+    else if (list.length === 1) sel.value = list[0].ssid;
     $('ssidManual').hidden = sel.value !== '__manual';
     ssidChanged();
   }

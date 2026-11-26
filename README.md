@@ -26,7 +26,7 @@ Web-App für WLAN-Gast-Voucher im iMaster NCE-Campus: Login gegen den NCE, Vouch
 Der QR-Code verbindet das Handy mit dem Gast-WLAN (`WIFI:S:<SSID>;T:nopass;;`). Danach öffnet sich die Portal-Anmeldeseite, dort wird der Code eingegeben.
 
 * **Einstellungen** (oben rechts): Texte (Überschrift, Hinweise, Fußzeile, `{ssid}` als Platzhalter), angezeigte Felder und Layout (Karten je Zeile, QR-Größe, Schriftgröße, Abstand, Ausrichtung, Rahmen) der Druckkarten, mit Vorschau. Gespeichert in `data/print.json` für alle Benutzer der Installation.
-* Die App liest die SSIDs aller Sites aus dem NCE und zeigt die mit **Open + Portal** zuerst. Ist die SSID-Konfiguration nicht lesbar, zeigt sie die SSIDs mit aktuell angemeldeten Portal-Gästen. Jede SSID kann auch von Hand eingetragen werden; Vorgabe: `qr.ssid` in `config.php`.
+* Die App liest die SSIDs aller Sites aus dem NCE und zeigt nur die mit **Open + Portal** (andere werden ausgeblendet). Ist die SSID-Konfiguration nicht lesbar, zeigt sie die SSIDs mit aktuell angemeldeten Portal-Gästen. Jede SSID kann auch von Hand eingetragen werden; Vorgabe: `qr.ssid` in `config.php`.
 * Der Knopf **Rohdaten** zeigt die probierten Abfragepfade und Beispiel-Datensätze mit der Einordnung (Portal / verschlüsselt).
 
 ### Sicherheit
