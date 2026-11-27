@@ -2,6 +2,7 @@
 # Benoetigt: Secrets FTP_SERVER (oder FTP_IP), FTP_USERNAME (oder FTP_USER), FTP_PASSWORD (oder FTP_PASS); Variable FTP_DIR (Zielordner, Standard: FTP-Stammordner)
 # Optional: Variablen FTP_PROTOCOL (ftps | ftp), FTP_PORT (21), FTP_SSL_FINGERPRINT (SHA1 des FTP-Zertifikats,
 #           falls dessen Name nicht zum Host passt), FTP_SSL_VERIFY (yes | no)
+# Vor jedem Upload laufen die automatischen Tests (tests/run.php) mit PHP 7.4 und 8.3; schlagen sie fehl, wird nichts hochgeladen.
 # Ohne FTP-Secrets wird der Upload uebersprungen.
 # config.php, data/ (Laufzeitdaten), Zertifikatsdateien und README werden nie hochgeladen oder veraendert; auf dem Server wird nichts geloescht.
 name: Deploy per FTP
@@ -9,6 +10,7 @@ name: Deploy per FTP
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
     inputs:
       dry_run:
@@ -23,7 +25,26 @@ on:
 concurrency: deploy
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['7.4', '8.3']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: curl, openssl, json
+          coverage: none
+      - name: Tests
+        run: php tests/run.php
+
   deploy:
+    needs: test
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -71,7 +92,7 @@ jobs:
 
           # Anwendung hochladen (ohne Git-Daten, README, config.php, Laufzeitdaten und Zertifikate)
           run_lftp "rm -r -f '${DIR}.git'" || true
-          run_lftp "mirror --reverse --verbose --no-perms --exclude-glob .git/ --exclude-glob .github/ --exclude-glob .gitignore --exclude-glob README.md --exclude-glob config.php --exclude-glob 'nce-ca*.pem' --exclude-glob 'data/*.json' --exclude-glob 'data/*.pem' ./ '${DIR}'"
+          run_lftp "mirror --reverse --verbose --no-perms --exclude-glob .git/ --exclude-glob .github/ --exclude-glob .gitignore --exclude-glob README.md --exclude-glob tests/ --exclude-glob config.php --exclude-glob 'nce-ca*.pem' --exclude-glob 'data/*.json' --exclude-glob 'data/*.pem' ./ '${DIR}'"
 
           # Kontrolle: Es darf kein .git-Ordner auf dem Server liegen
           if run_lftp "cls -1 '${DIR}.git/'" >/dev/null 2>&1; then echo "::error::.git-Ordner liegt noch auf dem Server"; exit 1; else echo "Kontrolle ok: kein .git-Ordner auf dem Server."; fi

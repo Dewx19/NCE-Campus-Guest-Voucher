@@ -40,13 +40,36 @@ Der QR-Code verbindet das Handy mit dem Gast-WLAN (`WIFI:S:<SSID>;T:nopass;;`). 
 * Der NCE-Token bleibt in der PHP-Session (HttpOnly-Cookie, `SameSite=Strict`, Abmeldung nach Inaktivität).
 * **TLS:** Fehlt eine CA-Datei, übernimmt die App beim ersten Login das Zertifikat des NCE (`data/nce-ca-<Ziel>.pem`) – noch bevor Zugangsdaten gesendet werden – und prüft ab dann jede Verbindung dagegen. Nach einer Erneuerung durch Huawei schlägt die Prüfung fehl; dann die Datei löschen, beim nächsten Login wird das neue Zertifikat übernommen. Alternativ eigene CA-Datei per `caFile` oder `nce-ca.pem` im App-Ordner.
 * **Login-Schutz:** nach 5 Fehlversuchen je IP in 15 Minuten gesperrt (`data/login_attempts.json`).
-* `.htaccess` sperrt `config.example.php`, `.pem`/`.json`-Dateien, `data/` und versteckte Ordner.
+* `.htaccess` sperrt `config.example.php`, `.pem`/`.json`-Dateien, `data/`, `src/`, `tests/` und versteckte Ordner.
+* **HTTPS erzwingen:** In der `.htaccess` steht eine auskommentierte Weiterleitung auf `https://`. Einschalten, sobald der Webspace ein gültiges Zertifikat für die Domain hat. Unter HTTPS ist das Session-Cookie automatisch `Secure`.
+
+## Aufbau
+
+| Pfad | Inhalt |
+|---|---|
+| `index.html`, `style.css` | Oberfläche |
+| `js/` | Frontend als ES-Module ohne Build: `main.js` (Start), `login.js`, `app.js`, `vouchers.js` (Gruppe, Liste, Anlegen, Löschen), `ssids.js`, `print.js` (Druck, Einstellungen), `qr.js`, `api.js`, `state.js`, `util.js` |
+| `api.php` | Schlanker Router: prüft Anfrage und Anmeldung, ruft die Funktionen aus `src/` auf |
+| `src/` | Backend: `settings.php` (Standardwerte, `config.php`), `nce.php` (Northbound-Client), `tls.php`, `auth.php` (Session, Login, Login-Sperre), `vouchers.php`, `ssids.php`, `print.php`, `util.php` |
+| `vendor/qrcode.js` | QR-Code-Erzeugung (MIT-Lizenz) |
+| `data/` | Laufzeitdaten: übernommenes Zertifikat, Login-Sperre, Druckeinstellungen |
+| `tests/` | Automatische Tests mit Mock-NCE (wird nicht hochgeladen) |
+
+## Tests
+
+```
+php tests/run.php
+```
+
+* **Unit-Tests** (`tests/unit/`): SSID-Einordnung, Voucher-Kennung, Zufallscodes, Auswertung der NCE-Antworten, Druckeinstellungen, Zertifikatsname.
+* **Ablauftests:** `tests/mock-nce.php` bildet die Northbound-API nach (Antwortformate laut NBI-Guide, Passcode in `userName`, `fail[].data`, max. 100 Einträge je Seite). Der Testlauf startet Mock und App mit dem PHP-Webserver und spielt Login, Gruppen, SSIDs, Anlegen, Liste, Löschen, Druckeinstellungen und Login-Sperre durch.
+* Die Tests nutzen eigene temporäre Ordner (`GV_DATA_DIR`) und lassen `data/` unberührt.
 
 ## Automatischer Upload (GitHub Actions)
 
-`.github/workflows/deploy.yml` lädt jede Änderung auf `main` per FTPS (lftp) auf den Webspace. Ohne FTP-Secrets wird der Upload übersprungen.
+`.github/workflows/deploy.yml` testet jede Änderung (`tests/run.php` mit PHP 7.4 und 8.3) und lädt sie danach per FTPS (lftp) auf den Webspace. Schlagen die Tests fehl, wird nichts hochgeladen. Ohne FTP-Secrets wird der Upload übersprungen.
 
-* **Nie hochgeladen oder verändert:** `config.php`, `data/`-Laufzeitdaten, Zertifikatsdateien, `README.md`, Git-Daten. Auf dem Server wird nichts gelöscht.
+* **Nie hochgeladen oder verändert:** `config.php`, `data/`-Laufzeitdaten, Zertifikatsdateien, `README.md`, `tests/`, Git-Daten. Auf dem Server wird nichts gelöscht.
 * **Sicherheitsnetz:** Der Upload bricht ab, wenn im Zielordner Dateien liegen, aber keine App (`api.php` und `index.html`).
 * **Probelauf:** *Actions → Deploy per FTP → Run workflow* mit „Nur Zielordner anzeigen“.
 
@@ -73,5 +96,5 @@ Einstellungen unter *Settings → Secrets and variables → Actions*:
 | Anlegen | `POST /controller/campus/v2/accountservice/accessuser/guest` (`userType` 6 = Passcode, 20 = Benutzer/Passwort) |
 | Löschen | `POST /controller/campus/v1/accountservice/users/batch-delete` |
 | Sites | `GET /controller/campus/v3/sites` |
-| SSIDs je Site | mehrere übliche Pfade, siehe `SSID_CANDIDATES` in `api.php` |
+| SSIDs je Site | `GET /controller/campus/v3/networkconfig/site/{siteId}/apssid` (weitere Pfade nur als Rückfall, siehe `src/ssids.php`) |
 | Online-User (Rückfall für SSIDs) | `GET /controller/campus/v1/accountservice/onlineusers` |

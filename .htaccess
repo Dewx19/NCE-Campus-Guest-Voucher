@@ -6,9 +6,22 @@ Options -Indexes
 <Files "config.example.php">
   Require all denied
 </Files>
-# Versteckte Ordner (z. B. .git) nie ausliefern
+# Versteckte Ordner (z. B. .git), Backend-Code und Tests nie direkt ausliefern
 RedirectMatch 404 /\.(git|github)(/|$)
+RedirectMatch 404 /(src|tests)(/|$)
+# HTTPS erzwingen: einschalten, sobald der Webspace ein gueltiges Zertifikat fuer die Domain hat
+# (sonst ist die App nicht mehr erreichbar). Das Session-Cookie ist unter HTTPS automatisch "Secure".
+# <IfModule mod_rewrite.c>
+#   RewriteEngine On
+#   RewriteCond %{HTTPS} !=on
+#   RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+#   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+# </IfModule>
 <IfModule mod_headers.c>
+  # Oberflaeche immer beim Server nachfragen (ETag), damit nach einem Update keine alten Module laufen
+  <FilesMatch "\.(html|js|css)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
   Header set X-Content-Type-Options "nosniff"
   Header set Referrer-Policy "no-referrer"
   Header set X-Frame-Options "DENY"
