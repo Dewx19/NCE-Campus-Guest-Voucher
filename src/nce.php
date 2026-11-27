@@ -52,6 +52,8 @@ function nce($method, $path, $token = null, $body = null, $query = null) {
     curl_close($ch);
     return $r;
 }
+/** Schluessel fuer ein cURL-Handle: ab PHP 8 ein Objekt, unter PHP 7.4 eine Ressource. */
+function handle_key($ch) { return is_object($ch) ? spl_object_id($ch) : (int)$ch; }
 /** Mehrere POSTs mit begrenzter Parallelitaet. Rueckgabe in Eingabereihenfolge. */
 function nce_pool_post($path, $token, $bodies, $concurrency) {
     $mh = curl_multi_init();
@@ -60,12 +62,12 @@ function nce_pool_post($path, $token, $bodies, $concurrency) {
         while ($next < $n && count($active) < $concurrency) {
             $ch = nce_curl('POST', $path, $token, $bodies[$next]);
             curl_multi_add_handle($mh, $ch);
-            $active[spl_object_id($ch)] = $next++;
+            $active[handle_key($ch)] = $next++;
         }
         do { $mrc = curl_multi_exec($mh, $running); } while ($mrc === CURLM_CALL_MULTI_PERFORM);
         if ($running) curl_multi_select($mh, 1.0);
         while ($info = curl_multi_info_read($mh)) {
-            $ch = $info['handle']; $id = spl_object_id($ch);
+            $ch = $info['handle']; $id = handle_key($ch);
             $results[$active[$id]] = nce_result($ch, curl_multi_getcontent($ch), $info['result'] !== CURLE_OK ? curl_error($ch) : null);
             curl_multi_remove_handle($mh, $ch); curl_close($ch);
             unset($active[$id]);
