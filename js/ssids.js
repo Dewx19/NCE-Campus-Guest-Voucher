@@ -19,10 +19,9 @@ export async function loadSsids() {
     list = all.filter((x) => x.openPortal); // nur Open + Portal anzeigen
     info.textContent = !all.length ? 'Keine SSIDs gefunden – „Rohdaten“ zeigt die Antworten des NCE.'
       : !list.length ? `Keine SSID mit Open + Portal erkannt (${all.length} andere ausgeblendet) – bitte „Rohdaten“ prüfen.`
-      : all[0].source === 'online' ? `Keine SSID-Konfiguration lesbar – ${list.length} SSID(s) mit angemeldeten Portal-Gästen.`
       : `${list.length} SSID(s) mit Open + Portal (aus ${r.sites} Site(s))` + (all.length > list.length ? `, ${all.length - list.length} weitere ausgeblendet.` : '.');
   } catch (e) { if (!quiet(e)) info.textContent = 'SSIDs nicht abrufbar (' + e.message + ').'; }
-  const opt = (x) => el('option', { value: x.ssid, text: x.ssid + (x.sites.length ? ` (${x.sites.join(', ')})` : '') + (x.source === 'online' ? ` – ${x.users} Gast/Gäste online` : '') });
+  const opt = (x) => el('option', { value: x.ssid, text: x.ssid + (x.sites.length ? ` (${x.sites.join(', ')})` : '') });
   // Vorgabe aus config.php (qr.ssid) nur, wenn sie nicht ohnehin erkannt wurde
   const cfgSsid = state.cfg.ssid && !list.some((x) => x.ssid === state.cfg.ssid) ? state.cfg.ssid : '';
   sel.replaceChildren(

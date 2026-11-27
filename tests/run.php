@@ -90,14 +90,22 @@ same('Gruppe waehlen', $st, 200);
 $op = []; foreach ($j['ssids'] ?? [] as $s) if ($s['openPortal']) $op[] = $s['ssid'];
 sort($op);
 same('SSIDs: Open + Portal erkannt', $op, ['Event-Gast', 'Guest-Wifi']);
+$all = array_column($j['ssids'] ?? [], 'ssid'); sort($all);
+same('SSIDs: alle Netze gelesen', $all, ['Corp-PPSK', 'Event-Gast', 'Guest-Wifi', 'Lobby-Open', 'Shop-PSK']);
+[$st, $j] = call('GET', 'ssids/raw');
+same('SSID-Rohdaten: alle Beispiele, dokumentierter Pfad', [count($j['beispiele'] ?? []), $j['endpoint'] ?? null], [6, '/controller/campus/v3/networkconfig/site/%s/apssid']);
 $gw = array_values(array_filter($j['ssids'] ?? [], function ($s) { return $s['ssid'] === 'Guest-Wifi'; }))[0] ?? [];
 same('SSID auf mehreren Sites zusammengefasst', $gw['sites'] ?? null, ['Filiale', 'Zentrale']);
 
-// Im NCE angelegter Voucher: Passcode aus userName
+// Echte NCE-Konten (Fixture): nur Typ 6 und 20 werden angezeigt, Passcode aus userName
 [$st, $j] = call('GET', 'vouchers');
-$nce = array_values(array_filter($j['vouchers'] ?? [], function ($v) { return $v['id'] === 'nce-1'; }))[0] ?? [];
-same('NCE-Voucher: Passcode aus userName', $nce['passcode'] ?? null, 'NcePass7x');
-same('NCE-Voucher: Beschreibung', $nce['description'] ?? null, 'Rezeption');
+$byId = []; foreach ($j['vouchers'] ?? [] as $v) $byId[$v['id']] = $v;
+$ID6 = '00000000-0000-4000-8000-000000000006'; $ID20 = '00000000-0000-4000-8000-000000000020'; $ID24 = '00000000-0000-4000-8000-000000000024';
+same('NCE-Konten: Typ 24 ausgeblendet', array_keys($byId), [$ID6, $ID20]);
+same('NCE-Voucher Typ 6: Passcode aus userName', $byId[$ID6]['passcode'] ?? null, 'Ab3dEf7hJk');
+$f = function ($v, $k) { return is_array($v) && array_key_exists($k, $v) ? $v[$k] : 'fehlt'; };
+same('NCE-Voucher Typ 6: vaildPeriod null = ohne Ablaufdatum', [$f($byId[$ID6] ?? null, 'validUntil'), $f($byId[$ID6] ?? null, 'expired')], [null, false]);
+same('NCE-Voucher Typ 20: Benutzername', [$f($byId[$ID20] ?? null, 'userName'), $f($byId[$ID20] ?? null, 'passcode')], ['GastTest01', null]);
 
 // Anlegen: Passcode-Batch (30 -> zwei Teilstuecke wie im Browser) und Benutzer/Passwort
 [$st, $a] = call('POST', 'vouchers', ['userType' => 6, 'count' => 25, 'offset' => 0, 'effectiveType' => 0, 'validDays' => 2, 'description' => 'Messe | Halle 3']);
@@ -115,7 +123,7 @@ same('Batch ueber maxBatch wird abgelehnt', $st, 400);
 // Liste nach dem Anlegen
 [$st, $j] = call('GET', 'vouchers');
 $vs = $j['vouchers'] ?? [];
-same('Liste: 1 + 30 + 1 Voucher', count($vs), 32);
+same('Liste: 2 + 30 + 1 Voucher (ohne Typ 24)', count($vs), 33);
 $byCode = []; foreach ($vs as $v) if ($v['passcode']) $byCode[$v['passcode']] = $v;
 same('Liste: angelegter Passcode wieder lesbar', isset($byCode[$codes[0]]), true);
 $v0 = $byCode[$codes[0]] ?? [];
@@ -126,18 +134,23 @@ $up = array_values(array_filter($vs, function ($v) { return $v['userType'] === 2
 same('Liste: Passwort wird nicht geliefert', array_key_exists('password', $up) ? $up['password'] : 'fehlt', null);
 
 // Loeschen: Gastkonten der Gruppe ja, fremde Konten nein, NCE-Fehler mit ID aus fail[].data
-$ids = [$v0['id'], 'staff-1', 'erfunden-99'];
+$ids = [$v0['id'], 'staff-1', $ID24, 'erfunden-99'];
 [$st, $j] = call('POST', 'vouchers/delete', ['ids' => $ids]);
 same('Loeschen: Gast-Voucher geloescht', $j['deleted'] ?? null, [$v0['id']]);
 $failedIds = array_column($j['failed'] ?? [], 'id'); sort($failedIds);
-same('Loeschen: fremde/unbekannte IDs abgelehnt', $failedIds, ['erfunden-99', 'staff-1']);
+same('Loeschen: Typ 24, andere Gruppe, unbekannt abgelehnt', $failedIds, [$ID24, 'erfunden-99', 'staff-1']);
 // Voucher, den der NCE ablehnt (Gast online)
 $st0 = json_decode(file_get_contents("$tmp/mock/state.json"), true);
-foreach ($st0['users'] as &$u) if ($u['id'] === 'nce-1') $u['description'] = 'Rezeption ONLINE'; unset($u);
+foreach ($st0['users'] as &$u) if ($u['id'] === $ID6) $u['description'] = 'Rezeption ONLINE'; unset($u);
 file_put_contents("$tmp/mock/state.json", json_encode($st0));
-[$st, $j] = call('POST', 'vouchers/delete', ['ids' => ['nce-1']]);
-same('Loeschen: NCE-Ablehnung der richtigen ID zugeordnet', $j['failed'][0]['id'] ?? null, 'nce-1');
+[$st, $j] = call('POST', 'vouchers/delete', ['ids' => [$ID6]]);
+same('Loeschen: NCE-Ablehnung der richtigen ID zugeordnet', $j['failed'][0]['id'] ?? null, $ID6);
 check('Loeschen: Grund vom NCE', strpos($j['failed'][0]['reason'] ?? '', 'online') !== false, json_encode($j));
+
+// Voucher-Rohdaten: Typuebersicht, keine Detailabfragen mehr
+[$st, $j] = call('GET', 'vouchers/raw');
+same('Voucher-Rohdaten: userTypes (alle Konten der Gruppe)', $j['userTypes'] ?? null, [6 => 30, 20 => 2, 24 => 1]);
+same('Voucher-Rohdaten: keine Detailabfragen', isset($j['detailVersuche']), false);
 
 // Druckeinstellungen
 [$st, $j] = call('POST', 'print-settings', ['settings' => ['title' => "Willkommen\n{ssid}", 'columns' => 9, 'qrSize' => 5, 'showDesc' => true, 'align' => 'rechts']]);

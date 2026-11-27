@@ -23,6 +23,8 @@ Web-App für WLAN-Gast-Voucher im iMaster NCE-Campus: Login gegen den NCE, Vouch
 ### Live-Daten
 
 * Die Liste kommt bei jedem Laden direkt aus dem NCE (Gäste der gewählten Benutzergruppe).
+* **Nur Gast-Voucher:** Die App verwaltet ausschließlich `userType` 6 (Passcode) und 20 (Benutzer/Passwort). Andere Konten derselben Gruppe (z. B. Typ 24) werden weder angezeigt noch gelöscht.
+* **Status** kommt nur aus dem Ablaufdatum (`vaildPeriod`): *Aktiv*, *Abgelaufen* oder *Ohne Ablaufdatum* (`vaildPeriod = null`, z. B. gültig ab erstem Login). `accountStatus` wird nicht ausgewertet.
 * **Passcodes** liefert der NCE im Feld `userName` mit – Liste, QR-Code und Druck funktionieren daher auch für Voucher, die direkt im NCE angelegt wurden. **Passwörter** von Benutzer/Passwort-Vouchern gibt die NBI nicht zurück; sie sind nur direkt nach dem Anlegen sichtbar (bis die Seite neu geladen wird).
 * Neue Voucher tragen im Beschreibungsfeld eine Markierung `VM:<Batch>-<Nr>`, darüber ordnet die App sie dem Anlage-Durchlauf zu.
 
@@ -32,7 +34,7 @@ Der QR-Code verbindet das Handy mit dem Gast-WLAN (`WIFI:S:<SSID>;T:nopass;;`). 
 
 * **Löschen** nur für Gastkonten (Typ 6 / 20) der gewählten Gruppe – das prüft der Server vor jedem Löschauftrag.
 * **Einstellungen** (oben rechts): Texte (Überschrift, Hinweise, Fußzeile, `{ssid}` als Platzhalter), angezeigte Felder und Layout (Karten je Zeile, QR-Größe, Schriftgröße, Abstand, Ausrichtung, Rahmen) der Druckkarten, mit Vorschau. Gespeichert in `data/print.json` für alle Benutzer der Installation.
-* Die App liest die SSIDs aller Sites aus dem NCE (`GET /controller/campus/v3/networkconfig/site/{siteId}/apssid`) und zeigt nur die mit **Open + Portal** (andere werden ausgeblendet): `ssidAuth.mode = open` und `ssidAuth.portal.mode` = `portalThirdController`, `portalThirdIndirect` oder `portalThird`. Ist die SSID-Konfiguration nicht lesbar, zeigt sie die SSIDs mit aktuell angemeldeten Portal-Gästen. Eine feste SSID kann zusätzlich über `qr.ssid` in `config.php` vorgegeben werden.
+* Die App liest die SSIDs aller Sites aus dem NCE (`GET /controller/campus/v3/networkconfig/site/{siteId}/apssid`) und zeigt nur die mit **Open + Portal** (andere werden ausgeblendet): `ssidAuth.mode = open` und `ssidAuth.portal.mode` = `portalThirdController`, `portalThirdIndirect` oder `portalThird`. Eine feste SSID kann zusätzlich über `qr.ssid` in `config.php` vorgegeben werden.
 * Der Knopf **Rohdaten** zeigt die probierten Abfragepfade und Beispiel-Datensätze mit der Einordnung (Portal / verschlüsselt).
 
 ### Sicherheit
@@ -62,7 +64,8 @@ php tests/run.php
 ```
 
 * **Unit-Tests** (`tests/unit/`): SSID-Einordnung, Voucher-Kennung, Zufallscodes, Auswertung der NCE-Antworten, Druckeinstellungen, Zertifikatsname.
-* **Ablauftests:** `tests/mock-nce.php` bildet die Northbound-API nach (Antwortformate laut NBI-Guide, Passcode in `userName`, `fail[].data`, max. 100 Einträge je Seite). Der Testlauf startet Mock und App mit dem PHP-Webserver und spielt Login, Gruppen, SSIDs, Anlegen, Liste, Löschen, Druckeinstellungen und Login-Sperre durch.
+* **Echte NCE-Antworten** (`tests/fixtures/`): anonymisierte Antworten eines iMaster NCE-Campus V300R025C10 für Gastkonten (Typ 6, 20, 24) und SSIDs (open/Portal, PSK, PPSK). Unit- und Ablauftests laufen gegen diese Daten.
+* **Ablauftests:** `tests/mock-nce.php` bildet die Northbound-API mit diesen Daten nach (Passcode in `userName`, `vaildPeriod = null`, `portal.mode = null` bei PSK/PPSK, `fail[].data`, max. 100 Einträge je Seite). Der Testlauf startet Mock und App mit dem PHP-Webserver und spielt Login, Gruppen, SSIDs, Anlegen, Liste, Löschen, Druckeinstellungen und Login-Sperre durch.
 * Die Tests nutzen eigene temporäre Ordner (`GV_DATA_DIR`) und lassen `data/` unberührt.
 
 ## Automatischer Upload (GitHub Actions)
@@ -96,5 +99,4 @@ Einstellungen unter *Settings → Secrets and variables → Actions*:
 | Anlegen | `POST /controller/campus/v2/accountservice/accessuser/guest` (`userType` 6 = Passcode, 20 = Benutzer/Passwort) |
 | Löschen | `POST /controller/campus/v1/accountservice/users/batch-delete` |
 | Sites | `GET /controller/campus/v3/sites` |
-| SSIDs je Site | `GET /controller/campus/v3/networkconfig/site/{siteId}/apssid` (weitere Pfade nur als Rückfall, siehe `src/ssids.php`) |
-| Online-User (Rückfall für SSIDs) | `GET /controller/campus/v1/accountservice/onlineusers` |
+| SSIDs je Site | `GET /controller/campus/v3/networkconfig/site/{siteId}/apssid` |

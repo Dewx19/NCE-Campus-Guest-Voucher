@@ -23,6 +23,10 @@ function fetch_groups($token) {
     usort($out, function ($x, $y) { return strcasecmp($x['path'], $y['path']); });
     return $out;
 }
+// Die App ist eine Gast-Voucher-Verwaltung: nur Passcode (6) und Benutzer/Passwort (20)
+const VOUCHER_TYPES = [6, 20];
+function is_voucher($u) { return is_array($u) && !empty($u['id']) && in_array((int)($u['userType'] ?? -1), VOUCHER_TYPES, true); }
+
 /** Betroffene Benutzer-ID eines fehlgeschlagenen Loeschauftrags (dokumentiert: fail[].data). */
 function fail_id($f) {
     foreach (['data', 'id', 'userId'] as $k) {
@@ -51,67 +55,58 @@ function require_group() {
     return $_SESSION['groupId'];
 }
 
-/** Code/Passwort aus einem NCE-Datensatz - maskierte Werte (****) zaehlen nicht. */
-function secret_of($u, $keys) {
-    $v = pick($u, $keys);
-    if ($v === null) return null;
-    $v = (string)$v;
-    return ($v === '' || preg_match('/^[*\x{2022}]+$/u', $v)) ? null : $v;
-}
 
 /** Rohdaten der Voucher-Abfrage zur Pruefung, welche Felder der NCE liefert (nur angemeldet). */
 function voucher_raw($token, $groupId, $all, $total) {
-    $fields = [];
-    foreach ($all as $u) if (is_array($u)) foreach (array_keys(flat($u)) as $k) $fields[$k] = ($fields[$k] ?? 0) + 1;
-    ksort($fields);
+    $fields = []; $types = [];
+    foreach ($all as $u) {
+        if (!is_array($u)) continue;
+        foreach (array_keys(flat($u)) as $k) $fields[$k] = ($fields[$k] ?? 0) + 1;
+        $t = (int)($u['userType'] ?? 0);
+        $types[$t] = ($types[$t] ?? 0) + 1;
+    }
+    ksort($fields); ksort($types);
     $hint = array_values(array_filter(array_keys($fields), function ($k) { return preg_match('/(pass|code|pwd|secret|key)/', $k); }));
-    $res = [
+    send(200, [
         'abfrage'      => ['pfad' => '/controller/campus/v2/accountservice/accessuser/users', 'userGroupId' => $groupId],
         'anzahl'       => count($all),
         'totalRecords' => $total,
+        'userTypes'    => $types,
+        'hinweis'      => 'Die App verwaltet nur userType ' . implode(' und ', VOUCHER_TYPES) . '; andere Typen werden nicht angezeigt und nicht geloescht.',
         'felder'       => $fields,
         'moeglicheCodeFelder' => $hint,
-        'beispiele'    => array_slice($all, 0, 5),
-    ];
-    // Versuch: Detailabfrage eines einzelnen Vouchers (liefert evtl. mehr Felder als die Liste)
-    $first = null;
-    foreach ($all as $u) if (is_array($u) && !empty($u['id'])) { $first = $u; if ((int)($u['userType'] ?? 0) === 6) break; }
-    if ($first) {
-        foreach (['/controller/campus/v2/accountservice/accessuser/users/%s', '/controller/campus/v1/accountservice/users/%s'] as $path) {
-            $r = nce('GET', sprintf($path, rawurlencode((string)$first['id'])), $token);
-            if ($r['status'] === 401) lost_session();
-            $res['detailVersuche'][] = ['pfad' => $path, 'id' => (string)$first['id'], 'status' => $r['status'],
-                'ergebnis' => nce_ok($r) ? ($r['json']['data'] ?? $r['json']) : nce_msg($r)];
-        }
-    }
-    send(200, $res);
+        'beispiele'    => array_slice($all, 0, 10),
+    ]);
 }
 
 /**
- * NCE-Gastkonten in das Format der Oberflaeche bringen.
- * Bei Passcode-Vouchern (Typ 6) liefert der NCE den Passcode im Feld userName.
- * Passwoerter von Benutzer/Passwort-Vouchern (Typ 20) gibt die NBI nicht zurueck.
+ * NCE-Gastkonten (nur Typ 6 und 20) in das Format der Oberflaeche bringen. Grundlage: echte NCE-Antworten
+ * (tests/fixtures/nce-accessuser-users.json):
+ *   - Typ 6: der Passcode steht in userName
+ *   - Typ 20: userName ist der Benutzername; Passwoerter gibt die NBI nicht zurueck
+ *   - vaildPeriod (sic) kann null sein (z. B. gueltig ab erstem Login) - dann gibt es kein Ablaufdatum
+ *   - accountStatus wird nicht ausgewertet (Bedeutung der Werte nicht belegt)
  */
 function voucher_list($all) {
     $nowMs = (int)(microtime(true) * 1000);
     $out = [];
     foreach ($all as $u) {
-        if (!is_array($u) || empty($u['id'])) continue;
+        if (!is_voucher($u)) continue;
         list($marker, $batch) = marker_of($u['description'] ?? '');
-        $type = (int)($u['userType'] ?? 0);
-        $until = (int)($u['vaildPeriod'] ?? $u['validPeriod'] ?? 0) ?: null; // "vaildPeriod" (sic) laut NBI-Guide
+        $type = (int)$u['userType'];
+        $name = is_scalar($u['userName'] ?? null) && (string)$u['userName'] !== '' ? (string)$u['userName'] : null;
+        $until = is_numeric($u['vaildPeriod'] ?? null) ? (int)$u['vaildPeriod'] : null;
         $out[] = [
             'id'           => (string)$u['id'],
             'userType'     => $type,
-            'userName'     => $type === 6 ? null : (($u['userName'] ?? '') ?: null),
-            'passcode'     => $type === 6 ? (secret_of($u, ['passcode', 'passCode', 'accessCode', 'guestPasscode']) ?? secret_of($u, ['userName'])) : null,
-            'password'     => $type === 6 ? null : secret_of($u, ['password', 'passWord']),
+            'userName'     => $type === 20 ? $name : null,
+            'passcode'     => $type === 6 ? $name : null,
+            'password'     => null,
             'description'  => strip_marker($u['description'] ?? ''),
             'marker'       => $marker,
             'batch'        => $batch,
-            'validUntil'   => $until,
+            'validUntil'   => $until ?: null,
             'expired'      => $until ? $until < $nowMs : false,
-            'disabled'     => (int)($u['accountStatus'] ?? 0) === 3,
             'maxAccessNum' => $u['maxAccessNum'] ?? null,
         ];
     }
@@ -174,7 +169,7 @@ function voucher_create($token, $groupId, $b) {
 /** IDs, die geloescht werden duerfen: nur Gastkonten (Typ 6 / 20) der gewaehlten Gruppe. */
 function deletable_ids($all) {
     $allowed = [];
-    foreach ($all as $u) if (is_array($u) && !empty($u['id']) && in_array((int)($u['userType'] ?? 0), [6, 20], true)) $allowed[(string)$u['id']] = true;
+    foreach ($all as $u) if (is_voucher($u)) $allowed[(string)$u['id']] = true;
     return $allowed;
 }
 

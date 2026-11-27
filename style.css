@@ -71,7 +71,7 @@ th.chk,td.chk{width:38px;padding-right:0}
 .pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600}
 .pill.active{background:rgba(27,127,75,.14);color:var(--ok)}
 .pill.expired{background:rgba(127,127,127,.18);color:var(--muted)}
-.pill.disabled{background:rgba(192,54,44,.13);color:var(--danger)}
+.pill.open{background:rgba(31,111,235,.12);color:var(--accent,#1f6feb)}
 .qrcol{width:64px}
 .qr-thumb{width:44px;height:44px;border:1px solid var(--line);border-radius:4px;background:#fff;padding:2px;cursor:pointer;display:block}
 .qr-thumb svg{width:100%;height:100%;display:block}

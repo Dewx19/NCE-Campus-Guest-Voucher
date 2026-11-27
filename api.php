@@ -15,8 +15,7 @@
  *   POST   /controller/campus/v2/accountservice/accessuser/guest    Gast anlegen
  *   POST   /controller/campus/v1/accountservice/users/batch-delete  Gaeste loeschen
  *   GET    /controller/campus/v3/sites                              Sites (fuer die SSID-Suche)
- *   GET    SSID-Konfiguration je Site (siehe SSID_CANDIDATES)       SSIDs fuer den WLAN-QR-Code
- *   GET    /controller/campus/v1/accountservice/onlineusers         Rueckfall: SSIDs mit Portal-Anmeldungen
+ *   GET    /controller/campus/v3/networkconfig/site/{id}/apssid     SSIDs je Site fuer den WLAN-QR-Code
  */
 @set_time_limit(120);
 require __DIR__ . '/src/bootstrap.php';
@@ -58,7 +57,6 @@ switch ("$method $route") {
     case 'GET ssids':
         send(200, load_ssids($token, false));
     case 'GET ssids/raw':
-        unset($_SESSION['ssidEp']); // Rohdaten: alle Pfade neu probieren
         send(200, load_ssids($token, true));
 
     case 'GET vouchers':

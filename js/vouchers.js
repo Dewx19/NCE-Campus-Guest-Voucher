@@ -43,9 +43,10 @@ $('groupSel').addEventListener('change', async (ev) => {
 });
 
 // ---------- Voucher-Liste (live) ----------
-const statusOf = (v) => (v.disabled ? 'disabled' : v.expired ? 'expired' : 'active');
-const STATUS = { active: 'Aktiv', expired: 'Abgelaufen', disabled: 'Deaktiviert' };
-const typeLabel = (t) => (t === 6 ? 'Passcode' : t === 20 ? 'Benutzer/Passwort' : `Typ ${t}`);
+// Status nur aus dem Ablaufdatum (accountStatus des NCE wird nicht ausgewertet)
+const statusOf = (v) => (!v.validUntil ? 'open' : v.expired ? 'expired' : 'active');
+const STATUS = { active: 'Aktiv', expired: 'Abgelaufen', open: 'Ohne Ablaufdatum' };
+const typeLabel = (t) => (t === 6 ? 'Passcode' : 'Benutzer/Passwort');
 
 export async function loadVouchers() {
   $('loading').hidden = false; $('empty').hidden = true;
@@ -68,8 +69,8 @@ export function render() {
   if (!$('groupSel').value) return;
   $('loading').hidden = true;
   const rows = filtered();
-  const act = state.vouchers.filter((v) => statusOf(v) === 'active').length;
-  $('summary').textContent = `${state.vouchers.length} Voucher · ${act} aktiv`;
+  const n = (st) => state.vouchers.filter((v) => statusOf(v) === st).length;
+  $('summary').textContent = [`${state.vouchers.length} Voucher`, `${n('active')} aktiv`, n('open') && `${n('open')} ohne Ablaufdatum`, n('expired') && `${n('expired')} abgelaufen`].filter(Boolean).join(' · ');
   $('empty').hidden = rows.length > 0;
   $('empty').textContent = state.vouchers.length ? 'Keine Treffer für den Filter.' : 'Noch keine Voucher vorhanden.';
   const ssid = currentSsid();

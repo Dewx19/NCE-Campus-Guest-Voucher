@@ -3,9 +3,11 @@
  * Mock des iMaster NCE-Campus (Northbound-API) fuer die automatischen Tests.
  * Start: MOCK_STATE=<ordner> php -S 127.0.0.1:<port> tests/mock-nce.php
  *
- * Bildet die Antwortformate laut NBI-Guide nach, inklusive der am echten NCE beobachteten Details:
+ * Bildet die Antwortformate laut NBI-Guide nach. Grundlage sind echte, anonymisierte NCE-Antworten
+ * (tests/fixtures/*.json), inklusive der am echten NCE beobachteten Details:
  *   - Passcode-Voucher (userType 6): der Passcode steht im Feld userName
- *   - SSIDs: ssidAuth.mode / ssidAuth.portal.mode
+ *   - SSIDs: ssidAuth.mode / ssidAuth.portal.mode (bei PSK/PPSK portal.mode = null)
+ *   - weitere Kontotypen (z. B. userType 24) in derselben Gruppe, vaildPeriod null, accountStatus 1
  *   - batch-delete: fehlgeschlagene IDs in fail[].data
  *   - pageSize max. 100 (Benutzergruppen, Sites)
  * Zugangsdaten im Mock: api / secret (Testwerte, kein echtes Konto).
@@ -25,12 +27,11 @@ $state = json_decode(stream_get_contents($fp), true);
 if (!is_array($state)) {
     $groups = [['id' => 'g-guest', 'name' => 'Guest', 'fullPathName' => 'ROOT\\Guest'], ['id' => 'g-staff', 'name' => 'Staff', 'fullPathName' => 'ROOT\\Staff']];
     for ($i = 1; $i <= 128; $i++) $groups[] = ['id' => "g-$i", 'name' => "Gruppe $i", 'fullPathName' => sprintf('ROOT\\Filiale-%03d', $i)];
-    $state = ['seq' => 0, 'groups' => $groups, 'users' => [
-        // im NCE angelegter Passcode-Voucher
-        ['id' => 'nce-1', 'userGroupId' => 'g-guest', 'userType' => 6, 'userName' => 'NcePass7x', 'description' => 'Rezeption', 'vaildPeriod' => (time() + 86400) * 1000, 'accountStatus' => 0],
-        // Konto, das kein Gast-Voucher ist
-        ['id' => 'staff-1', 'userGroupId' => 'g-staff', 'userType' => 1, 'userName' => 'mitarbeiter', 'description' => '', 'accountStatus' => 0],
-    ], 'log' => []];
+    // Gast-Gruppe: die drei echten Konten aus dem NCE (Typ 24, 6, 20) + ein Konto in einer anderen Gruppe
+    $real = json_decode(file_get_contents(__DIR__ . '/fixtures/nce-accessuser-users.json'), true)['data'];
+    foreach ($real as &$u) $u['userGroupId'] = 'g-guest'; unset($u);
+    $real[] = ['id' => 'staff-1', 'userGroupId' => 'g-staff', 'userType' => 20, 'userName' => 'mitarbeiter', 'description' => '', 'accountStatus' => 1, 'vaildPeriod' => null];
+    $state = ['seq' => 0, 'groups' => $groups, 'users' => $real, 'log' => []];
 }
 function save() { global $fp, $state; ftruncate($fp, 0); rewind($fp); fwrite($fp, json_encode($state)); fflush($fp); flock($fp, LOCK_UN); }
 register_shutdown_function('save');
@@ -60,14 +61,14 @@ if ($path === '/controller/campus/v1/accountservice/usergroups') page($state['gr
 if ($path === '/controller/campus/v3/sites') page([['id' => 's1', 'name' => 'Zentrale'], ['id' => 's2', 'name' => 'Filiale']]);
 
 // --- SSIDs (dokumentierter Pfad) ---
+// Site s1: echte NCE-Datensaetze (Guest-Wifi open/portalThirdController, Shop-PSK psk/null, Corp-PPSK ppsk/null)
+// Site s2: weitere Portal-Varianten laut NBI-Guide
 if (preg_match('#^/controller/campus/v3/networkconfig/site/([^/]+)/apssid$#', $path, $m)) {
+    if ($m[1] === 's1') ok(json_decode(file_get_contents(__DIR__ . '/fixtures/nce-apssid.json'), true)['data']);
     $ssid = function ($name, $mode, $portal) { return ['id' => md5($name), 'name' => $name, 'enable' => true,
-        'ssidAuth' => ['mode' => $mode, 'portal' => ['mode' => $portal, 'pushPageId' => 'pp-1']]]; };
-    ok($m[1] === 's1'
-        ? [$ssid('Guest-Wifi', 'open', 'portalThirdController'), $ssid('Lobby-Open', 'open', 'portalDisable'), $ssid('Corp', 'wpa2-psk', 'portalDisable')]
-        : [$ssid('Guest-Wifi', 'open', 'portalThirdIndirect'), $ssid('Event-Gast', 'open', 'portalThird')]);
+        'ssidAuth' => ['mode' => $mode, 'portal' => ['mode' => $portal]]]; };
+    ok([$ssid('Guest-Wifi', 'open', 'portalThirdIndirect'), $ssid('Event-Gast', 'open', 'portalThird'), $ssid('Lobby-Open', 'open', 'portalDisable')]);
 }
-if ($path === '/controller/campus/v1/accountservice/onlineusers') ok([]);
 
 // --- Gaeste ---
 if ($path === '/controller/campus/v2/accountservice/accessuser/users' && $method === 'GET') {

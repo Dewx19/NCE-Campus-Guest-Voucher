@@ -70,10 +70,3 @@ function flat($a, $prefix = '') {
     }
     return $out;
 }
-/** Erstes Array unter dem Schluessel $key (auch verschachtelt). */
-function find_key($a, $key, $depth = 0) {
-    if (!is_array($a) || $depth > 4) return null;
-    if (isset($a[$key]) && is_array($a[$key])) return $a[$key];
-    foreach ($a as $v) if (is_array($v) && ($r = find_key($v, $key, $depth + 1)) !== null) return $r;
-    return null;
-}
