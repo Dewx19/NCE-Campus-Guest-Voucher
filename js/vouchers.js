@@ -43,9 +43,11 @@ $('groupSel').addEventListener('change', async (ev) => {
 });
 
 // ---------- Voucher-Liste (live) ----------
-// Status nur aus dem Ablaufdatum (accountStatus des NCE wird nicht ausgewertet)
-const statusOf = (v) => (!v.validUntil ? 'open' : v.expired ? 'expired' : 'active');
-const STATUS = { active: 'Aktiv', expired: 'Abgelaufen', open: 'Ohne Ablaufdatum' };
+// Status berechnet der Server (src/vouchers.php: voucher_status) aus accountStatus und Ablaufdatum
+const statusOf = (v) => v.status || 'unknown';
+const STATUS = { ready: 'Bereit zur Nutzung', active: 'Aktiv', expired: 'Abgelaufen', disabled: 'Deaktiviert', unknown: 'Unbekannt' };
+// Gueltig-bis-Spalte: ohne Ablaufdatum bei noch nicht eingeloesten Vouchern beginnt die Laufzeit mit der ersten Nutzung
+const validText = (v) => (v.validUntil ? fmtDate(v.validUntil) : statusOf(v) === 'ready' ? 'ab erster Nutzung' : '–');
 const typeLabel = (t) => (t === 6 ? 'Passcode' : 'Benutzer/Passwort');
 
 export async function loadVouchers() {
@@ -70,7 +72,7 @@ export function render() {
   $('loading').hidden = true;
   const rows = filtered();
   const n = (st) => state.vouchers.filter((v) => statusOf(v) === st).length;
-  $('summary').textContent = [`${state.vouchers.length} Voucher`, `${n('active')} aktiv`, n('open') && `${n('open')} ohne Ablaufdatum`, n('expired') && `${n('expired')} abgelaufen`].filter(Boolean).join(' · ');
+  $('summary').textContent = [`${state.vouchers.length} Voucher`, n('ready') && `${n('ready')} bereit`, n('active') && `${n('active')} aktiv`, n('expired') && `${n('expired')} abgelaufen`, n('disabled') && `${n('disabled')} deaktiviert`].filter(Boolean).join(' · ');
   $('empty').hidden = rows.length > 0;
   $('empty').textContent = state.vouchers.length ? 'Keine Treffer für den Filter.' : 'Noch keine Voucher vorhanden.';
   const ssid = currentSsid();
@@ -84,7 +86,7 @@ export function render() {
       el('td', {}, codeOf(v) ? el('span', { class: 'mono', text: codeOf(v) }) : el('span', { class: 'na', text: 'nur bei Anlage sichtbar' })),
       el('td', {}, v.password ? el('span', { class: 'mono', text: v.password }) : el('span', { class: 'na', text: v.userType === 20 ? 'nur bei Anlage sichtbar' : '–' })),
       el('td', { text: typeLabel(v.userType) }),
-      el('td', { text: fmtDate(v.validUntil) }),
+      el('td', { text: validText(v) }),
       el('td', {}, el('span', { class: `pill ${statusOf(v)}`, text: STATUS[statusOf(v)] })),
       el('td', { class: 'desc', text: v.description || '' }),
       el('td', {}, qrCell),

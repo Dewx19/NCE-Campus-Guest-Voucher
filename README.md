@@ -24,7 +24,15 @@ Web-App für WLAN-Gast-Voucher im iMaster NCE-Campus: Login gegen den NCE, Vouch
 
 * Die Liste kommt bei jedem Laden direkt aus dem NCE (Gäste der gewählten Benutzergruppe).
 * **Nur Gast-Voucher:** Die App verwaltet ausschließlich `userType` 6 (Passcode) und 20 (Benutzer/Passwort). Andere Konten derselben Gruppe (z. B. Typ 24) werden weder angezeigt noch gelöscht.
-* **Status** kommt nur aus dem Ablaufdatum (`vaildPeriod`): *Aktiv*, *Abgelaufen* oder *Ohne Ablaufdatum* (`vaildPeriod = null`, z. B. gültig ab erstem Login). `accountStatus` wird nicht ausgewertet.
+* **Status** aus `accountStatus` (am NCE V300R025C10 verifiziert) und Ablaufdatum (`vaildPeriod`):
+
+  | Status | Bedingung |
+  |---|---|
+  | Deaktiviert | `accountStatus = 3` |
+  | Abgelaufen | `vaildPeriod` liegt in der Vergangenheit |
+  | Aktiv | `accountStatus = 0` – Voucher wurde eingelöst bzw. aktiviert |
+  | Bereit zur Nutzung | `accountStatus = 1` – wartet auf die erste Nutzung; bei Gültigkeit ab erster Nutzung beginnt die Laufzeit erst dann („Gültig bis: ab erster Nutzung“) |
+  | Unbekannt | anderer oder fehlender `accountStatus` |
 * **Passcodes** liefert der NCE im Feld `userName` mit – Liste, QR-Code und Druck funktionieren daher auch für Voucher, die direkt im NCE angelegt wurden. **Passwörter** von Benutzer/Passwort-Vouchern gibt die NBI nicht zurück; sie sind nur direkt nach dem Anlegen sichtbar (bis die Seite neu geladen wird).
 * Neue Voucher tragen im Beschreibungsfeld eine Markierung `VM:<Batch>-<Nr>`, darüber ordnet die App sie dem Anlage-Durchlauf zu.
 

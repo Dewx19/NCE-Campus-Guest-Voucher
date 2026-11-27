@@ -48,10 +48,23 @@ $fx = json_decode(file_get_contents(__DIR__ . '/../fixtures/nce-accessuser-users
 $list = voucher_list(rows_of($fx));
 same('Fixture Voucher: nur Typ 6 und 20', array_column($list, 'userType'), [6, 20]);
 same('Fixture Typ 6: Passcode aus userName, Kennung', [$list[0]['passcode'], $list[0]['userName'], $list[0]['marker'], $list[0]['batch']], ['Ab3dEf7hJk', null, 'VM:BTEST0001-001', 'BTEST0001']);
-same('Fixture Typ 6: vaildPeriod null', [$list[0]['validUntil'], $list[0]['expired']], [null, false]);
+same('Fixture Typ 6: noch nicht eingeloest', [$list[0]['validUntil'], $list[0]['accountStatus'], $list[0]['status']], [null, 1, 'ready']);
 same('Fixture Typ 20: Benutzername, kein Passwort', [$list[1]['userName'], $list[1]['passcode'], $list[1]['password']], ['GastTest01', null, null]);
-same('Fixture: accountStatus wird nicht ausgewertet', array_key_exists('disabled', $list[0]), false);
+same('Fixture Typ 20: noch nicht eingeloest', $list[1]['status'], 'ready');
 same('Fixture: loeschbar nur Typ 6/20', array_keys(deletable_ids(rows_of($fx))), ['00000000-0000-4000-8000-000000000006', '00000000-0000-4000-8000-000000000020']);
+
+// --- Status (accountStatus am NCE verifiziert: 1 bereit, 0 aktiv, 3 deaktiviert) ---
+$now = 1800000000000; $future = $now + 3600000; $past = $now - 3600000;
+same('Status 1 ohne Ablauf: bereit', voucher_status(1, null, $now), 'ready');
+same('Status 1 mit Ablauf in Zukunft: bereit', voucher_status(1, $future, $now), 'ready');
+same('Status 0 mit Ablauf in Zukunft: aktiv', voucher_status(0, $future, $now), 'active');
+same('Status 0 ohne Ablauf: aktiv', voucher_status(0, null, $now), 'active');
+same('Status 0, abgelaufen: abgelaufen', voucher_status(0, $past, $now), 'expired');
+same('Status 1, abgelaufen: abgelaufen', voucher_status(1, $past, $now), 'expired');
+same('Status 3: deaktiviert (auch wenn abgelaufen)', [voucher_status(3, null, $now), voucher_status(3, $past, $now)], ['disabled', 'disabled']);
+same('Status unbekannt', [voucher_status(null, null, $now), voucher_status(7, $future, $now)], ['unknown', 'unknown']);
+$l = voucher_list([['id' => 'x', 'userType' => 6, 'userName' => 'A', 'accountStatus' => '0', 'vaildPeriod' => '9999999999999']]);
+same('Status aus Textwerten der API', [$l[0]['accountStatus'], $l[0]['status']], [0, 'active']);
 
 // --- Voucher-Liste: Grenzfaelle ---
 $list = voucher_list([
@@ -62,7 +75,7 @@ $list = voucher_list([
     ['id' => 'd', 'userType' => 1, 'userName' => 'admin'],
 ]);
 same('Liste: ohne ID und fremde Typen ignoriert', array_column($list, 'id'), ['a', 'b', 'c']);
-same('Liste: abgelaufen', $list[0]['expired'], true);
+same('Liste: abgelaufen', $list[0]['status'], 'expired');
 same('Liste: leerer Benutzername = null', $list[1]['userName'], null);
 
 // --- Druckeinstellungen ---

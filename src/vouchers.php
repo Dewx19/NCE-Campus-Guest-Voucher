@@ -23,6 +23,22 @@ function fetch_groups($token) {
     usort($out, function ($x, $y) { return strcasecmp($x['path'], $y['path']); });
     return $out;
 }
+/**
+ * Status eines Vouchers. Reihenfolge: deaktiviert > abgelaufen > aktiv (eingeloest) > bereit (noch nicht eingeloest).
+ *   disabled  accountStatus 3
+ *   expired   Ablaufdatum (vaildPeriod) liegt in der Vergangenheit
+ *   active    accountStatus 0 - eingeloest bzw. aktiviert
+ *   ready     accountStatus 1 - wartet auf die erste Nutzung
+ *   unknown   anderer oder fehlender accountStatus
+ */
+function voucher_status($accountStatus, $validUntil, $nowMs) {
+    if ($accountStatus === 3) return 'disabled';
+    if ($validUntil && $validUntil < $nowMs) return 'expired';
+    if ($accountStatus === 0) return 'active';
+    if ($accountStatus === 1) return 'ready';
+    return 'unknown';
+}
+
 // Die App ist eine Gast-Voucher-Verwaltung: nur Passcode (6) und Benutzer/Passwort (20)
 const VOUCHER_TYPES = [6, 20];
 function is_voucher($u) { return is_array($u) && !empty($u['id']) && in_array((int)($u['userType'] ?? -1), VOUCHER_TYPES, true); }
@@ -85,7 +101,8 @@ function voucher_raw($token, $groupId, $all, $total) {
  *   - Typ 6: der Passcode steht in userName
  *   - Typ 20: userName ist der Benutzername; Passwoerter gibt die NBI nicht zurueck
  *   - vaildPeriod (sic) kann null sein (z. B. gueltig ab erstem Login) - dann gibt es kein Ablaufdatum
- *   - accountStatus wird nicht ausgewertet (Bedeutung der Werte nicht belegt)
+ *   - accountStatus (am NCE V300R025C10 verifiziert): 1 = noch nicht eingeloest, 0 = eingeloest/aktiviert, 3 = deaktiviert
+ *     Bei Gueltigkeit ab erster Nutzung beginnt die Laufzeit erst mit der Einloesung (vaildPeriod bis dahin null).
  */
 function voucher_list($all) {
     $nowMs = (int)(microtime(true) * 1000);
@@ -96,6 +113,7 @@ function voucher_list($all) {
         $type = (int)$u['userType'];
         $name = is_scalar($u['userName'] ?? null) && (string)$u['userName'] !== '' ? (string)$u['userName'] : null;
         $until = is_numeric($u['vaildPeriod'] ?? null) ? (int)$u['vaildPeriod'] : null;
+        $acc = is_numeric($u['accountStatus'] ?? null) ? (int)$u['accountStatus'] : null;
         $out[] = [
             'id'           => (string)$u['id'],
             'userType'     => $type,
@@ -106,7 +124,8 @@ function voucher_list($all) {
             'marker'       => $marker,
             'batch'        => $batch,
             'validUntil'   => $until ?: null,
-            'expired'      => $until ? $until < $nowMs : false,
+            'accountStatus'=> $acc,
+            'status'       => voucher_status($acc, $until, $nowMs),
             'maxAccessNum' => $u['maxAccessNum'] ?? null,
         ];
     }

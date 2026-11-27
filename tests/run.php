@@ -104,7 +104,8 @@ $ID6 = '00000000-0000-4000-8000-000000000006'; $ID20 = '00000000-0000-4000-8000-
 same('NCE-Konten: Typ 24 ausgeblendet', array_keys($byId), [$ID6, $ID20]);
 same('NCE-Voucher Typ 6: Passcode aus userName', $byId[$ID6]['passcode'] ?? null, 'Ab3dEf7hJk');
 $f = function ($v, $k) { return is_array($v) && array_key_exists($k, $v) ? $v[$k] : 'fehlt'; };
-same('NCE-Voucher Typ 6: vaildPeriod null = ohne Ablaufdatum', [$f($byId[$ID6] ?? null, 'validUntil'), $f($byId[$ID6] ?? null, 'expired')], [null, false]);
+same('NCE-Voucher Typ 6: accountStatus 1 = bereit zur Nutzung', [$f($byId[$ID6] ?? null, 'validUntil'), $f($byId[$ID6] ?? null, 'status')], [null, 'ready']);
+same('NCE-Voucher Typ 20: accountStatus 1 = bereit zur Nutzung', $f($byId[$ID20] ?? null, 'status'), 'ready');
 same('NCE-Voucher Typ 20: Benutzername', [$f($byId[$ID20] ?? null, 'userName'), $f($byId[$ID20] ?? null, 'passcode')], ['GastTest01', null]);
 
 // Anlegen: Passcode-Batch (30 -> zwei Teilstuecke wie im Browser) und Benutzer/Passwort
@@ -130,6 +131,7 @@ $v0 = $byCode[$codes[0]] ?? [];
 same('Liste: Beschreibung ohne Kennung', $v0['description'] ?? null, 'Messe | Halle 3');
 same('Liste: Batch-Zuordnung', $v0['batch'] ?? null, $a['batch'] ?? '');
 check('Liste: Ablauf in ~2 Tagen', abs(($v0['validUntil'] ?? 0) / 1000 - (time() + 2 * 86400)) < 120);
+same('Liste: neu angelegt = bereit zur Nutzung', $v0['status'] ?? null, 'ready');
 $up = array_values(array_filter($vs, function ($v) { return $v['userType'] === 20; }))[0] ?? [];
 same('Liste: Passwort wird nicht geliefert', array_key_exists('password', $up) ? $up['password'] : 'fehlt', null);
 

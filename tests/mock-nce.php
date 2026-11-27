@@ -87,7 +87,7 @@ if ($path === '/controller/campus/v2/accountservice/accessuser/guest' && $method
     $until = isset($body['validPeriodLong']) ? (int)$body['validPeriodLong'] : null;
     $state['users'][] = ['id' => 'u' . (++$state['seq']), 'userGroupId' => $body['userGroupId'], 'userType' => $type,
         'userName' => $type === 6 ? $body['passcode'] : $body['userName'], 'password' => $body['password'] ?? null,
-        'description' => (string)($body['description'] ?? ''), 'vaildPeriod' => $until, 'accountStatus' => 0,
+        'description' => (string)($body['description'] ?? ''), 'vaildPeriod' => $until, 'accountStatus' => 1, // neu = noch nicht eingeloest
         'maxAccessNum' => $body['maxAccessNum'] ?? null];
     out(201, ['errcode' => '0', 'errmsg' => '']);
 }
