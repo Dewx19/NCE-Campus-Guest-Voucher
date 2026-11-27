@@ -417,14 +417,44 @@ function lost_session() { session_end_clear(); send(401, ['error' => 'NCE-Token 
 // Benutzergruppen
 // =====================================================================
 function fetch_groups($token) {
-    $r = nce('GET', '/controller/campus/v1/accountservice/usergroups', $token, null, ['pageIndex' => 1, 'pageSize' => 1000]);
-    nce_check($r, 'Abfrage der Benutzergruppen');
-    $out = [];
-    foreach (rows_of($r['json']) as $g) {
-        if (!empty($g['id'])) $out[] = ['id' => $g['id'], 'name' => $g['name'] ?? '', 'path' => $g['fullPathName'] ?? ($g['name'] ?? '')];
+    $out = []; $seen = [];
+    for ($page = 1; $page <= 100; $page++) {
+        $r = nce('GET', '/controller/campus/v1/accountservice/usergroups', $token, null, ['pageIndex' => $page, 'pageSize' => 100]);
+        nce_check($r, 'Abfrage der Benutzergruppen');
+        $rows = rows_of($r['json']);
+        foreach ($rows as $g) {
+            if (empty($g['id']) || isset($seen[$g['id']])) continue;
+            $seen[$g['id']] = true;
+            $out[] = ['id' => $g['id'], 'name' => $g['name'] ?? '', 'path' => $g['fullPathName'] ?? ($g['name'] ?? '')];
+        }
+        $total = (int)($r['json']['totalRecords'] ?? 0);
+        if (count($rows) < 100 || ($total && count($seen) >= $total)) break;
     }
     usort($out, function ($x, $y) { return strcasecmp($x['path'], $y['path']); });
     return $out;
+}
+/** Betroffene Benutzer-ID eines fehlgeschlagenen Loeschauftrags (dokumentiert: fail[].data). */
+function fail_id($f) {
+    foreach (['data', 'id', 'userId'] as $k) {
+        $v = $f[$k] ?? null;
+        if (is_array($v)) $v = $v['id'] ?? $v['userId'] ?? null;
+        if (is_scalar($v) && (string)$v !== '') return (string)$v;
+    }
+    return '';
+}
+/** Alle Zugangskonten einer Benutzergruppe live aus dem NCE: [liste, totalRecords]. */
+function fetch_group_users($token, $groupId) {
+    $all = []; $total = 0;
+    for ($page = 1; $page <= 10; $page++) {
+        $r = nce('GET', '/controller/campus/v2/accountservice/accessuser/users', $token, null, [
+            'userGroupId' => $groupId, 'pageIndex' => $page, 'pageSize' => 1000, 'sortKey' => 'userName', 'sortDir' => 'ASC']);
+        nce_check($r, 'Abfrage der Voucher');
+        $data = rows_of($r['json']);
+        $total = (int)($r['json']['totalRecords'] ?? count($data));
+        $all = array_merge($all, $data);
+        if (count($all) >= $total || !$data) break;
+    }
+    return [$all, $total];
 }
 function require_group() {
     if (empty($_SESSION['groupId'])) send(409, ['error' => 'Keine Gast-Benutzergruppe ausgewaehlt.', 'needGroup' => true]);
@@ -433,17 +463,17 @@ function require_group() {
 
 // =====================================================================
 // SSIDs fuer den WLAN-QR-Code
-// Die SSID-Abfrage ist in der oeffentlichen Huawei-Doku nicht beschrieben: es werden die ueblichen Pfade probiert,
-// der erste funktionierende wird fuer die Sitzung gemerkt. Antworten werden tolerant ausgewertet.
+// Dokumentiert: GET /controller/campus/v3/networkconfig/site/{siteId}/apssid. Weitere Pfade nur als Rueckfall;
+// der erste funktionierende wird fuer die Sitzung gemerkt.
 // =====================================================================
 const SSID_CANDIDATES = [
-    '/controller/campus/v3/networkconfig/site/%s/apssidconfig',
     '/controller/campus/v3/networkconfig/site/%s/apssid',
+    '/controller/campus/v3/networkconfig/site/%s/apssidconfig',
     '/controller/campus/v1/networkconfig/site/%s/apssid',
     '/controller/campus/v1/networkservice/networkconfig/wlan/sites/%s/ssids',
 ];
 function load_sites($token) {
-    foreach ([1000, 100, 20, null] as $size) {
+    foreach ([100, null] as $size) { // NBI: pageSize max. 100; Rueckfall ohne Paging-Parameter
         $map = []; $ok = true;
         for ($page = 1; $page <= 50; $page++) {
             $r = nce('GET', '/controller/campus/v3/sites', $token, null, $size ? ['pageIndex' => $page, 'pageSize' => $size] : null);
@@ -468,29 +498,44 @@ function flat($a, $prefix = '') {
     }
     return $out;
 }
-/** Einordnung einer SSID: Portal-Authentifizierung? Verschluesselt (PSK/802.1X)?
- *  Liefert der NCE ssidAuth.mode (z. B. "open"), ist dieses Feld fuer offen/verschluesselt massgeblich. */
+/** Erstes Array unter dem Schluessel $key (auch verschachtelt). */
+function find_key($a, $key, $depth = 0) {
+    if (!is_array($a) || $depth > 4) return null;
+    if (isset($a[$key]) && is_array($a[$key])) return $a[$key];
+    foreach ($a as $v) if (is_array($v) && ($r = find_key($v, $key, $depth + 1)) !== null) return $r;
+    return null;
+}
+const PORTAL_MODES_ON = ['portalthirdcontroller', 'portalthirdindirect', 'portalthird'];
+/**
+ * Einordnung einer SSID. Massgeblich sind die dokumentierten Felder:
+ *   ssidAuth.mode        "open" = offenes WLAN
+ *   ssidAuth.portal.mode portalDisable | portalThirdController (integriert) | portalThirdIndirect (vermittelt) | portalThird (extern)
+ * Nur wenn der NCE diese Felder nicht liefert, wird ueber die Feldnamen geschaetzt.
+ */
 function classify_ssid($rec) {
+    $auth = find_key($rec, 'ssidAuth');
+    $mode = $auth && isset($auth['mode']) && is_scalar($auth['mode']) ? strtolower((string)$auth['mode']) : null;
+    $pMode = $auth && is_array($auth['portal'] ?? null) && isset($auth['portal']['mode']) && is_scalar($auth['portal']['mode'])
+        ? strtolower((string)$auth['portal']['mode']) : null;
+    if ($pMode !== null) {
+        $portal = in_array($pMode, PORTAL_MODES_ON, true);
+        $open = $mode === null || $mode === 'open';
+        return ['mode' => $mode, 'portalMode' => $auth['portal']['mode'], 'portal' => $portal, 'openPortal' => $portal && $open, 'basis' => 'ssidAuth'];
+    }
+    // Rueckfall: Schaetzung ueber Feldnamen/Werte
     $portal = false; $secured = false; $open = false;
-    $f = flat($rec);
-    $mode = null;
-    foreach ($f as $k => $v) if (preg_match('/(^|\.)ssidauth\.(mode|authmode)$/', $k)) { $mode = $v; break; }
-    foreach ($f as $k => $v) {
+    foreach (flat($rec) as $k => $v) {
         $isAuthKey = preg_match('/(auth|secur|encrypt|policy|mode|type)/', $k);
-        $off = preg_match('/^(false|0|off|disable|disabled|none|null|)$/', $v);
+        $off = preg_match('/^(false|0|off|disable|disabled|none|null|portaldisable|)$/', $v) || strpos($v, 'disable') !== false;
         if (preg_match('/(portal|webauth|pushpage)/', $k) && !$off && !preg_match('/(free|escape|bypass)/', $k)) $portal = true;
-        if ($isAuthKey && preg_match('/(portal|webauth|web-auth)/', $v)) $portal = true;
+        if ($isAuthKey && preg_match('/(portal|webauth|web-auth)/', $v) && !$off) $portal = true;
         if ($mode === null) {
             if ($isAuthKey && preg_match('/(wpa|psk|802\.1x|dot1x|ppsk|wep|sae|enterprise)/', $v)) $secured = true;
             if ($isAuthKey && preg_match('/^(open|none|no-?auth|open-?portal|open\+portal)/', $v)) $open = true;
         }
     }
-    if ($mode !== null) {
-        $open = (bool)preg_match('/^(open|none|no-?auth)/', $mode);
-        $secured = !$open;
-        if (strpos($mode, 'portal') !== false) { $portal = true; $open = true; $secured = false; }
-    }
-    return ['mode' => $mode, 'portal' => $portal, 'openPortal' => $portal && (!$secured || $open)];
+    if ($mode !== null) { $open = $mode === 'open'; $secured = !$open; }
+    return ['mode' => $mode, 'portalMode' => null, 'portal' => $portal, 'openPortal' => $portal && (!$secured || $open), 'basis' => 'geschaetzt'];
 }
 function load_ssids($token, $raw = false) {
     $sites = load_sites($token);
@@ -686,16 +731,7 @@ if ($method === 'GET' && ($route === 'vouchers' || $route === 'vouchers/raw')) {
     // Live aus dem NCE. Bei Passcode-Vouchern (Typ 6) liefert der NCE den Passcode im Feld userName.
     // Passwoerter von Benutzer/Passwort-Vouchern (Typ 20) gibt die NBI nicht zurueck.
     $groupId = require_group();
-    $all = []; $total = 0;
-    for ($page = 1; $page <= 10; $page++) {
-        $r = nce('GET', '/controller/campus/v2/accountservice/accessuser/users', $token, null, [
-            'userGroupId' => $groupId, 'pageIndex' => $page, 'pageSize' => 1000, 'sortKey' => 'userName', 'sortDir' => 'ASC']);
-        nce_check($r, 'Abfrage der Voucher');
-        $data = rows_of($r['json']);
-        $total = (int)($r['json']['totalRecords'] ?? count($data));
-        $all = array_merge($all, $data);
-        if (count($all) >= $total || !$data) break;
-    }
+    list($all, $total) = fetch_group_users($token, $groupId);
     if ($route === 'vouchers/raw') voucher_raw($token, $groupId, $all, $total);
     $nowMs = (int)(microtime(true) * 1000);
     $vouchers = [];
@@ -777,14 +813,23 @@ if ($method === 'POST' && $route === 'vouchers/delete') {
     foreach ((read_json()['ids'] ?? []) as $id) if (is_string($id) && $id !== '') $ids[] = $id;
     $ids = array_slice(array_values(array_unique($ids)), 0, 1000);
     if (!$ids) send(400, ['error' => 'Keine Voucher ausgewaehlt.']);
+    // Serverseitig pruefen: nur Gastkonten (Typ 6 / 20) der gewaehlten Gruppe duerfen geloescht werden
+    $groupId = require_group();
+    list($all) = fetch_group_users($token, $groupId);
+    $allowed = [];
+    foreach ($all as $u) if (is_array($u) && !empty($u['id']) && in_array((int)($u['userType'] ?? 0), [6, 20], true)) $allowed[(string)$u['id']] = true;
+    $rejected = [];
+    foreach ($ids as $id) if (!isset($allowed[$id])) $rejected[] = ['id' => $id, 'reason' => 'Kein Gast-Voucher der gewaehlten Gruppe - nicht geloescht.'];
+    $ids = array_values(array_filter($ids, function ($id) use ($allowed) { return isset($allowed[$id]); }));
+    if (!$ids) send(200, ['deleted' => [], 'failed' => $rejected]);
     $r = nce('POST', '/controller/campus/v1/accountservice/users/batch-delete', $token, ['allUserIds' => $ids]);
     if ($r['status'] === 401) lost_session();
     if ($r['err'] || $r['status'] !== 200 || !$r['json']) send(502, ['error' => 'Loeschen fehlgeschlagen: ' . nce_msg($r)]);
     $deleted = array_values(array_filter($r['json']['success'] ?? [], 'is_string'));
     // Fehlgeschlagene mit Grund (die NBI liefert IDs oder Objekte mit errcode/errmsg)
-    $failed = [];
+    $failed = $rejected;
     foreach (($r['json']['fail'] ?? []) as $f) {
-        if (is_array($f)) $failed[] = ['id' => (string)($f['id'] ?? $f['userId'] ?? ''), 'reason' => trim(($f['errmsg'] ?? $f['reason'] ?? $f['message'] ?? '') . (isset($f['errcode']) ? ' (errcode ' . $f['errcode'] . ')' : ''))];
+        if (is_array($f)) $failed[] = ['id' => fail_id($f), 'reason' => trim(($f['errmsg'] ?? $f['reason'] ?? $f['message'] ?? '') . (isset($f['errcode']) ? ' (errcode ' . $f['errcode'] . ')' : ''))];
         else $failed[] = ['id' => (string)$f, 'reason' => ''];
     }
     if (!$deleted && !$failed && isset($r['json']['errcode']) && (string)$r['json']['errcode'] !== '0') $failed[] = ['id' => '', 'reason' => nce_msg($r)];
